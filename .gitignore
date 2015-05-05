@@ -1,3 +1,10 @@
+.DS_Store
+data
+private
+figures
+Icon
+*~
+
 # History files
 .Rhistory
 .Rapp.history
