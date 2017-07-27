@@ -5,52 +5,66 @@ library(psych)
 library(lavaan)
 library(plyr)
 setwd("/Users/michael/Tresors/PD_SNA/Couples_Baseline_SNA")
-sna <- read.spss("data/SNA alter summary 8000-8094 3.24.15.sav", to.data.frame=TRUE)
+
+#Old approach where Kim had done some sort of minimal data reshaping to create group file.
+#sna_old <- read.spss("data/SNA alter summary 8000-8094 3.24.15.sav", to.data.frame=TRUE)
+#sna_old$Alter <- as.character(gsub("(^\\s*|\\s*$)", "", sna_old$Alter, perl=TRUE))
 
 #8030 DyadID 0 (partner) missing
-sna <- subset(sna, PTNUM != "8030")
+#sna <- subset(sna, PTNUM != "8030")
 
-#merge together self-reports etc.
-biq <- read.spss("data/BIQ 3.31.15.sav", to.data.frame=TRUE)
-cts <- read.spss("data/CTS intake scores 3.4.15.sav", to.data.frame=TRUE)
-das <- read.spss("data/DAS intake scores 3.4.15.sav", to.data.frame=TRUE)
-ecr <- read.spss("data/ECR intake scores 3.4.15.sav", to.data.frame=TRUE)
-pai <- read.spss("data/PAI intake scores 3.4.15.sav", to.data.frame=TRUE)
-#iip <- read.spss("data/IIP intake scores.sav", to.data.frame=TRUE)
-iip <- read.spss("data/IIP90 intake.sav", to.data.frame=TRUE)
-iip$iip_agency <- with(iip, .25*(iip_pa - iip_hi + .707*(iip_bc + iip_no - iip_fg - iip_jk)))
-iip$iip_communion <- with(iip, .25*(iip_lm - iip_de + .707*(iip_no + iip_jk - iip_bc - iip_fg)))
-iip <- subset(iip, select=c(UsrID, PTNUM, DyadID, IIP_PD1, IIP_PD2, IIP_PD3, iip_agency, iip_communion))
+#new approach: read all alter information from alter_summary.csv files
+alter_summaries <- list.files("data/ties", pattern="alter_summary.csv", recursive=TRUE, full.names=TRUE)
 
-sidp <- read.spss("data/SIDP4 intake consensus scored 4.2.15.sav", to.data.frame=TRUE)
-sidp <- sidp[, c("UsrID", "PTNUM", "DyadID", grep(".*_sidp$", names(sidp), value=TRUE), grep(".*Count$", names(sidp), value=TRUE))]
+#filter out follow-up matrices
+alter_summaries <- alter_summaries[!grepl("6mo", alter_summaries, ignore.case=TRUE)]
+f_PTNUM <- as.numeric(sub(".*/ties/(\\d+)/.*", "\\1", alter_summaries, perl=TRUE))
+tab <- table(f_PTNUM) #look for summaries !=2
+badids <- which(f_PTNUM %in% c(names(tab[which(tab != 2)]), "8144", "8030")) #8144 has corrupt alter summary at the moment
+alter_summaries[badids]
+alter_summaries <- alter_summaries[-1*badids]
+f_PTNUM <- f_PTNUM[-1*badids]
+dyad_roles <- substr(sub("data/ties/\\d+/", "", alter_summaries), 7, 7)
+alter_summaries[which(!dyad_roles %in% c("0", "1"))]
+dyad_roles <- factor(dyad_roles, levels=c("0", "1"), labels=c("partner", "patient"))
+f_UsrID <- as.numeric(substr(sub("data/ties/\\d+/", "", alter_summaries), 3, 7))
 
-#counts are present/absent ratings, whereas dimensional scores account for 0, 1, 2 coding
-#use dimensional (_sidp) for now.
+sna <- c()
+for (i in 1:length(alter_summaries)) {
+  f <- read.csv(alter_summaries[i], header=TRUE)
+  f$partner <- factor(c("yes", rep("no", nrow(f) - 1))) #first row is supposed to be partner (should check against Kim)
+  f$Dyad <- dyad_roles[i]
+  f$PTNUM <- f_PTNUM[i]
+  f$UsrID <- f_UsrID[i]
+  sna <- rbind(sna, f)
 
-#has 8888 as missing code
-lapply(das, function(x) { if (is.numeric(x)) { range(x, na.rm=TRUE) } } )
-
-recodeMissing <- function(vec, targetval=99) {
-  vec[vec==targetval] <- NA
-  return(vec)
+  if (nrow(f) != 25) { warning("File: ", alter_summaries[i], " has ", nrow(f), " alters ")}
 }
 
-das <- colwise(recodeMissing, targetval=8888)(das)
-            
-other = Reduce(function(...) { merge(..., by=c("UsrID", "PTNUM", "DyadID"), all=TRUE) },
-    list(biq, cts, das, ecr, pai, iip, sidp))
+names(sna) <- sub("Alter_", "", names(sna))
+sna <- plyr::rename(sna, c(Name="Alter")) #for consistency with earlier coding
+sna$age[which(sna$age == -1)] <- NA  
+sna$Romance <- factor(sna$Romance, levels=c(0, 1, 2), labels=c("never", "current", "past"))
+sna$relationship <- factor(sna$relationship, levels=c(1:12), 
+    labels=c("family", "romantic partner (current or former)", "romantic partner's family",
+        "work or school together", "neighbor", "religious affiliation", "shared hobby or interest",
+        "treatment group or provider", "close friend", "childhood friend", "acquaintance or friend of friend", "other"))
 
-#recode 9999 as missing
+
 table(sna$prxsk)
-table(sna$prxsk_num)
+table(sna$sepds)
+table(sna$sfhvn)
+table(sna$secbs)
+table(sna$Angry)
+table(sna$Happy)
 
-sna$prxsk_num <- as.numeric(sna$prxsk) - 1 #subtract 1 to keep 0-6 scaling from printed form
-sna$sepds_num <- as.numeric(sna$sepds) - 1 
-sna$sfhvn_num <- as.numeric(sna$sfhvn) - 1
-sna$secbs_num <- as.numeric(sna$secbs) - 1
-sna$Angry_num <- 6 - as.numeric(sna$Angry) #Reverse code anger so that higher scores indicate more anger
-sna$Happy_num <- as.numeric(sna$Happy) #Happy appears to be coded in the right direction, corr with attach_total is .53 
+#In Kim's coding, subtract 1 to keep 0-6 scaling from printed form (not relevant for direct read from alter_summary)
+#sna$prxsk_num <- as.numeric(sna$prxsk) - 1
+#sna$sepds_num <- as.numeric(sna$sepds) - 1 
+#sna$sfhvn_num <- as.numeric(sna$sfhvn) - 1
+#sna$secbs_num <- as.numeric(sna$secbs) - 1
+sna$Angry <- 6 - as.numeric(sna$Angry) #Reverse code anger so that higher scores indicate more anger
+sna$Happy <- as.numeric(sna$Happy) #Happy appears to be coded in the right direction, corr with attach_total is .53 
 sna$UsrID <- factor(sna$UsrID)
 sna$PTNUM <- factor(sna$PTNUM)
 
@@ -58,48 +72,53 @@ sna$PTNUM <- factor(sna$PTNUM)
 #code such that larger weights indicate greater closeness
 #need to recode as 2-5, since 1 (have never met) only occurs in alter tie csv files
 #thus, reverse code such that 5=Very close, 4=Moderately close, 3=Slightly close, 2=Not at all close
-sna$Close_num <- as.numeric(sna$Close) + 1
+sna$Close <- as.numeric(sna$Close) + 1
 
 #trim white space from alter
 sna$Alter <- as.character(gsub("(^\\s*|\\s*$)", "", sna$Alter, perl=TRUE))
 
-round(prop.table(table(sna$prxsk_num)), 3)
-round(prop.table(table(sna$sepds_num)), 3)
-round(prop.table(table(sna$sfhvn_num)), 3)
-round(prop.table(table(sna$secbs_num)), 3)
+round(prop.table(table(sna$prxsk)), 3)
+round(prop.table(table(sna$sepds)), 3)
+round(prop.table(table(sna$sfhvn)), 3)
+round(prop.table(table(sna$secbs)), 3)
 
 #define attachment figure as 5 (agree somewhat) or 5 (agree strongly) on each of these 4 items
 #note that as.numeric above 
-sna$attach_figure <- sna$prxsk_num >= 5 & sna$sepds_num >= 5 & sna$sfhvn_num >= 5 & sna$secbs_num >= 5
-#sna$attach_figure <- sna$prxsk_num >= 6 & sna$sepds_num >= 6 & sna$sfhvn_num >= 6 & sna$secbs_num >= 6
+sna$attach_figure <- as.numeric(sna$prxsk >= 5 & sna$sepds >= 5 & sna$sfhvn >= 5 & sna$secbs >= 5)
+#sna$attach_figure <- sna$prxsk >= 6 & sna$sepds >= 6 & sna$sfhvn >= 6 & sna$secbs >= 6
 
 #this results in about a 10% rate of attachment figures, which is reasonable
 table(sna$attach_figure)
 prop.table(table(sna$attach_figure))
 
-table(other$PAIBORtot >= 30)
-#hist(other$PAIBORtot)
+load(file="data/selfreports/couples_baseline_clinical_27Jul2017.RData")
+
+table(couples_baseline_clin$PAIBORtot >= 30)
+#hist(couples_baseline_clin$PAIBORtot)
 
 #good reliability for attachment items (0.89)
-alpha(sna[,c("prxsk_num", "sepds_num", "sfhvn_num", "secbs_num")])
+alpha(sna[,c("prxsk", "sepds", "sfhvn", "secbs")])
 
-sna$attach_total <- apply(sna[,c("prxsk_num", "sepds_num", "sfhvn_num", "secbs_num")], 1, sum)
+sna$attach_total <- apply(sna[,c("prxsk", "sepds", "sfhvn", "secbs")], 1, sum)
 
 #aggregate alter statistics for each participant
+options(warn=0)
 sna_agg <- ddply(sna, .(UsrID), function(subdf) {
-      past_rom <- sum(subdf$Romance=="yes, in the past")
-      cur_rom <- sum(subdf$Romance=="yes, currently")
-      all_rom <- sum(subdf$Romance %in% c("yes, currently", "yes, in the past"))
-      tot_cutoff <- sum(subdf$Cutoff=="yes")
-      avg_duration <- mean(subdf$YrsKnwn, na.rm=TRUE)
+      past_rom <- sum(subdf$Romance=="past") #"yes, in the past")
+      cur_rom <- sum(subdf$Romance=="current") #"yes, currently")
+      all_rom <- sum(subdf$Romance %in% c("past", "current")) #c("yes, currently", "yes, in the past"))
+      tot_cutoff <- sum(subdf$CutOff==1) #"yes")
+      avg_duration <- mean(subdf$YrsKnown, na.rm=TRUE)
       attach_total <- sum(subdf$attach_figure, na.rm=FALSE)
       data.frame(UsrID=subdf$UsrID[1], PTNUM=subdf$PTNUM[1], Dyad=subdf$Dyad[1],
           past_rom, cur_rom, all_rom, tot_cutoff, avg_duration, attach_total)
     })
 
-sna_merge <- merge(sna, other[,c("UsrID", "sex", "age", "ECRanx", "ECRavoid", "PAIBORaffe", "PAIBORiden", "PAIBORnegr", "PAIBORtot", "IIP_PD1", "IIP_PD2", "IIP_PD3", "iip_agency", "iip_communion")], all.x=TRUE, by="UsrID")
-setdiff(unique(sna$PTNUM), unique(other$PTNUM)) #has SNA but no other
-setdiff(unique(other$PTNUM), unique(sna$PTNUM)) #has other but no SNA
+
+sna_merge <- merge(sna, couples_baseline_clin[,c("UsrID", "p_sex", "p_age", "ECRanx", "ECRavoid", "PAIBORaffe", "PAIBORiden", "PAIBORnegr", "PAIBORtot", 
+            "IIP_PD1", "IIP_PD2", "IIP_PD3", "iip_agency", "iip_communion", "iip_elevation")], all.x=TRUE, by="UsrID")
+setdiff(unique(sna$PTNUM), unique(couples_baseline_clin$PTNUM)) #has SNA but no clinical
+setdiff(unique(couples_baseline_clin$PTNUM), unique(sna$PTNUM)) #has clinical but no SNA
 
 #add row number to be able to track down alter attributes later (when populating vertices)
 sna_merge$rownum <- 1:nrow(sna_merge)
@@ -151,7 +170,7 @@ couple_match <- lapply(couple_split, function(subdf) {
       alter_match <- which(within_distance & is_exclusive_best)
       
       #also verify that age is within 5 years
-      age_diff <- abs(patient_data$Age[alter_match] - partner_data$Age[patient_bestmatch[alter_match]]) <= 5
+      age_diff <- abs(patient_data$age[alter_match] - partner_data$age[patient_bestmatch[alter_match]]) <= 5
       #if age is missing, an NA will be generated for age_diff... in this case, default to a match (inclusive)
       age_diff[which(is.na(age_diff))] <- TRUE
       alter_match <- alter_match[age_diff]
@@ -189,22 +208,22 @@ couple_match <- lapply(couple_split, function(subdf) {
       }
       
       if (length(alter_match) > 0L) {
-        common <- data.frame(patient_data[alter_match,c("Alter", "Age", "rownum")], partner_data[patient_bestmatch[alter_match], c("Alter", "Age", "rownum")])
+        common <- data.frame(patient_data[alter_match,c("Alter", "age", "rownum")], partner_data[patient_bestmatch[alter_match], c("Alter", "age", "rownum")])
         names(common) <- c("patient_name", "patient_age", "patient_rownum", "partner_name", "partner_age", "partner_rownum")
-        patient_only <- patient_data[-1*alter_match,c("Alter", "Age", "rownum")]
-        partner_only <- partner_data[-1*patient_bestmatch[alter_match], c("Alter", "Age", "rownum")]
+        patient_only <- patient_data[-1*alter_match,c("Alter", "age", "rownum")]
+        partner_only <- partner_data[-1*patient_bestmatch[alter_match], c("Alter", "age", "rownum")]
       } else {
         common <- list()
-        patient_only <- patient_data[,c("Alter", "Age", "rownum")]
-        partner_only <- partner_data[,c("Alter", "Age", "rownum")]
+        patient_only <- patient_data[,c("Alter", "age", "rownum")]
+        partner_only <- partner_data[,c("Alter", "age", "rownum")]
       }
       
       idlist <- rbind(
           common,
-          data.frame(patient_name=patient_only$Alter, patient_age=patient_only$Age, patient_rownum=patient_only$rownum,
+          data.frame(patient_name=patient_only$Alter, patient_age=patient_only$age, patient_rownum=patient_only$rownum,
               partner_name=NA_character_, partner_age=NA_real_, partner_rownum=NA_integer_),
           data.frame(patient_name=NA_character_, patient_age=NA_real_, patient_rownum=NA_integer_, 
-              partner_name=partner_only$Alter, partner_age=partner_only$Age, partner_rownum=partner_only$rownum)
+              partner_name=partner_only$Alter, partner_age=partner_only$age, partner_rownum=partner_only$rownum)
       )
       
       idlist$alter_id <- 1:nrow(idlist)
@@ -229,188 +248,9 @@ couple_match <- lapply(couple_split, function(subdf) {
 #8030 only has 25 alters
 
 #output file of matches for manual checks
-sink(file="couple_altermatch_31Mar2015.txt", append=FALSE)
+sink(file="couple_altermatch_27Jul2017.txt", append=FALSE)
 print(couple_match)
 sink()
-
-#manual fixes for name matching
-#8006:
-#patient name: jess ra
-#partner name: Jessica Rad
-#Jean Ray is a closer string match to Jess Ra, so leading to false negative
-#Changed patient jess ra to Jessica Rad (row 292)
-
-#8010:
-#patient name: J R L
-#partner name: JR Le
-#not matching using heuristics above. Manually fixed dataset (row 477) to be JR Le for patient
-
-#8023:
-#patient name: jennifer p
-#partner name: Jen P
-#string distance a bit too far due to nick name. Manually changed dataset (row 1018) to jennifer p for partner
-
-#8031:
-# patient name: Mary Jo Da (age 50)
-# partner name: Mary Jo Mc (age 50)
-# This is the same person according to RA checks. Change patient name to Mary Jo Mc (row 1327)
-
-#8032:
-# patient name: Celeste Pe (age 31)
-# partner name: Celeste Pi (age 31)
-# verified by RAs to be the same person. Change patient last name to Pi (row 1403)
-
-#8041:
-# patient name: Kaitlin Ge (age NA)
-# partner name: Caitlyn Ge (age 30)
-# change patient name to Caitlyn Ge (age 30) (row 1670)
-# patient name: BJ Ge (age 32)
-# partner name: BJ III Ge (age 30)
-# change patient name to BJ III Ge (row 1660)
-
-#8043:
-# patient name: Edey Se (age NA)
-# partner name: Edith Se (age 51)
-# hard to tell based on this info, but Edey seems like the obvious nickname for edith
-# HOLDING OFF FOR NOW
-
-#8046:
-# patient name: Josefina As (age 85, family)
-# partner name: Josephina Pa (age 93, partner's family)
-# very likely match based on relationship and uncommon name. Change partner name to Josefina As and age to 85 (row 1832).
-
-#8058: 
-#has a problem with jr and sr. 
-#partner names: "Carlos_Cr" and "Carlos_Jr_Cr"
-#patient names: "Carlos_Sr_Cr" and "Carlos_Jr_Cr"
-#leads to Jr matching better than Sr. Manually fixed in dataset (row 2185) to be Carlos_Sr_Cr in both cases
-
-#8061:
-# patient name: Lo_WI (age 35)
-# partner name: Lo_Wi (age 29)
-# change both ages to 32 (midpoint)
-
-#8063:
-# patient name: Mary_Ann_Va (age 70)
-# partner name: Mary-Anne_VB (age 70)
-# change partner name to Mary_Ann_Va
-
-# patient name: Carson_Va (age 8)
-# partner name: Carson_VB (age 7)
-# change partner name to Carson_Va (row 2443)
-
-# patient name: Jeffrey_Va (age 31)
-# partner name: Jeff_VB (age 32)
-# change partner name to Jeffrey_Va (row 2438)
-
-# patient name: Dan_Go (age 58)
-# partner name: Daniel_Go (age 58)
-# change patient name to Daniel_Go (row 2460)
-
-# patient name: Landen_Va (age 1)
-# partner name: Landen_VB (age 2)
-# change partner name to Landen_Va (row 2444)
-
-# patient name: Tim_Va (age 33)
-# partner name: Timmy_VB (age 33)
-# change partner name to Tim_Va
-
-# patient name: Kaeden_Va (age 10)
-# partner name: Kaeden_VB (age 10)
-# change partner name to Kaeden_Va (row 2442)
-
-#8064:
-# patient name: Gerry_Ch (age 67)
-# partner name: Geraldine_Ch (age 63)
-# change patient name to Geraldine_Ch (row 2502)
-
-#8066:
-# patient name: Ruth_Ra (age 71)
-# partner name: Ruth_Ra (age 78)
-# change patient and partner ages to 74.5 (midpoint)
-
-#8067:
-# patient name: Don_BA (age 61)
-# partner name: Donald_Ba (age 60)
-# change patient name to Donald_Ba (row 2652)
-
-# patient name: Dar_BA (age 64)
-# partner name: Darlene_Ba (age 55)
-# change patient name to Darlene_Ba and both ages to 60
-
-# patient name: Tony_PI (age 50)
-# partner name: Anthony_Pi (age 50)
-# change patient name to Anthony_Pi (row 2657)
-
-#8069:
-# patient name: Debbie_Fo (age 49)
-# partner name: Debbie_Fo (age 57)
-# change both ages to 53 (midpoint)
-
-# patient name: Ken_Fo (age 47)
-# partner name: Ken_Fo (age 60)
-# change both ages to 53
-
-# patient name: Zack_Co (age 36)
-# partner name: Zack_Go (age 38)
-# RA notes indicate relationship match. Change partner name to Zack_Co (row 2686)
-
-#8070:
-# patient name: Mark_Go (age 24)
-# partner name: Mark_Ge (age 22)
-# RAs indicate relationship match. Change partner name to Mark_Go 
-
-#8072:
-# patient name: Kathy_Ta (age 57)
-# partner name: Kathryn_Ta (age 49)
-# RAs indicate relationship match. Change patient name to Kathryn_Ta and both ages to 53.
-
-# patient name: Sean_Ke (age 3)
-# partner name: Shawn_De (age 3)
-# change partner name to Sean_Ke (row 2845)
-
-# patient name: Carson_Ke (age 2)
-# partner name: Carson_De (age 2)
-# change partner name to Carson_Ke.
-
-#8074:
-# patient name: Fazilla_Sh (age 28)
-# partner name: Fazilla_Ja (age 28)
-# change partner name to Fazilla_Sh (row 2888)
-
-#8082:
-# patient name: Stephanie_Ge (age 56)
-# partner name: Stephanie_Ge (age 50)
-# change ages to 53
-
-# patient name: Mark_Jr_Mi (age 37)
-# partner name: Marky_Mi (age 37)
-# change partner name to Mark_Jr_Mi
-
-# patient name: Mark_Sr_Mi (age 60)
-# partner name: Mark_Mi (age 60)
-# change partner name to Mark_Sr_Mi
-
-#8084:
-# patient name: Deb_Ca (age 58)
-# partner name: Deb_Ca (age 51)
-# change both ages to 54
-
-#8088:
-# patient name: Annette_Pa (age 43)
-# partner name: Annette_Pa (age 49)
-# change both ages to 46
-
-#8091:
-# patient name: Mike_Re (age 55)
-# partner name: Michael_Re (age 54)
-# change patient name to Michael_Re (row 3305)
-
-# patient name: Dave_Al (age 54)
-# partner name: David_Al (age 52)
-# change patient name to David_Al (3314)
-
-
 
 ##STEP 2: IMPORT CLOSENESS RATINGS AMONG ALTERS FOR EACH PARTICIPANT TO BUILD EGO/DYAD NETWORK
 ##  graphlist will contain an element for each participant with actors (vertices) and edges as a list (to match igraph input).
@@ -428,6 +268,11 @@ PTNUMs <- sub("^.*/ties/(\\d+)/.*$", "\\1", weighted_matrices, perl=TRUE)
 which(table(PTNUMs) > 2)
 which(table(PTNUMs) < 2)
 
+tab <- table(PTNUMs) #look for summaries !=2
+badids <- which(PTNUMs %in% names(tab[which(tab != 2)]))
+PTNUMs[badids]
+weighted_matrices <- weighted_matrices[-1*badids]
+
 graphlist <- list()
 for (f in 1:length(weighted_matrices)) {
   alterties <- read.csv(weighted_matrices[f], header=TRUE)[,-1] #first column contains names of alters (redundant with cols since symmetric)
@@ -440,7 +285,7 @@ for (f in 1:length(weighted_matrices)) {
   #note: for some early couples (e.g., 8003), the full names (not initials) are present, but these were cleaned for the SPSS file...
   #I could try to build the alter summary myself from the alter_summary csv files, but would lose information about patient partner
   #for now, use summed min adist to match
-  if (!is.null(couple_match[[PTNUM]])) { #there are more egonet files in the ties folder than in dataset
+  if (!is.null(couple_match[[PTNUM]])) { #there are more egonet files in the ties folder than in SPSS dataset
     idlist <- couple_match[[PTNUM]][["idlist"]]
     adist_to_patient <- sapply(alternames, function(tiename) {
           #return minimum distance (best match) for this name from the ties file
@@ -485,17 +330,15 @@ for (f in 1:length(weighted_matrices)) {
     
     stopifnot(length(sharednames) == length(unique(sharednames)))
     
-    #TODO: add romance, cutoff, happy, and emotion (categorical) to list of attributes to test for assortativity
-    
-    #generate vertex list with attach_total, attach_figure, YrsKnwn, Angry_num, partner
+    #generate vertex list with attach_total, attach_figure, YrsKnown, Angry, partner
     if (patient==1) {
       actors <- data.frame(name=idlist$shared_name[!is.na(idlist$patient_rownum)],
           alter_id=idlist$alter_id[!is.na(idlist$patient_rownum)],
-          sna_merge[na.omit(idlist$patient_rownum), c("Alter", "partner", "attach_total", "YrsKnwn", "Angry_num", "Happy_num", "Close_num", "Romance")], stringsAsFactors=FALSE) #put in original name for clarity
+          sna_merge[na.omit(idlist$patient_rownum), c("Alter", "partner", "attach_total", "YrsKnown", "Angry", "Happy", "Close", "Romance", "CutOff", "Emotion")], stringsAsFactors=FALSE) #put in original name for clarity
     } else {
       actors <- data.frame(name=idlist$shared_name[!is.na(idlist$partner_rownum)],
           alter_id=idlist$alter_id[!is.na(idlist$partner_rownum)],
-          sna_merge[na.omit(idlist$partner_rownum), c("Alter", "partner", "attach_total", "YrsKnwn", "Angry_num", "Happy_num", "Close_num", "Romance")], stringsAsFactors=FALSE) #put in original name for clarity
+          sna_merge[na.omit(idlist$partner_rownum), c("Alter", "partner", "attach_total", "YrsKnown", "Angry", "Happy", "Close", "Romance", "CutOff", "Emotion")], stringsAsFactors=FALSE) #put in original name for clarity
     }
     
     #go over matrix and generate adjacency list by mapping alter names to the idlist and using common alter_ids
@@ -516,7 +359,7 @@ for (f in 1:length(weighted_matrices)) {
     #also need to add connections for ego
     #looks like these were left out from egonet calculations of closeness, degree, etc.
     egocon <- adply(actors, 1, function(rdf) {
-          data.frame(a1="SELF", a2=rdf$name, weight=rdf$Close_num)
+          data.frame(a1="SELF", a2=rdf$name, weight=rdf$Close)
         })[,c("a1", "a2", "weight")] #only keep edge fields to match above (plyr returns original fields, too)
     elist_withego <- rbind(elist, egocon)
     
@@ -583,6 +426,9 @@ for (id in unique(idsplit[,1])) {
   #drop patient.partner, partner.partner, patient.Alter, and partner.Alter since these are replaced by role
   combined_actors <- combined_actors[, !names(combined_actors) %in% c("patient.partner", "partner.partner", "patient.Alter", "partner.Alter")]
   
+  dyadnames <- c(partner$actors$name[partner$actors$partner=="yes"], patient$actors$name[patient$actors$partner=="yes"])
+  combined_actors_nodyad <- gdata::drop.levels(subset(combined_actors, !name %in% dyadnames))
+  
   patient_altername <- combined_actors$name[which(combined_actors$role == "patient")]
   partner_altername <- combined_actors$name[which(combined_actors$role == "partner")]
   
@@ -591,11 +437,11 @@ for (id in unique(idsplit[,1])) {
   
   #add patient closeness ratings to edge list
   patient_egoedges <- adply(patient_actors, 1, function(rdf) {
-        data.frame(a1=patient_altername, a2=rdf$name, weight=rdf$patient.Close_num)
+        data.frame(a1=patient_altername, a2=rdf$name, weight=rdf$patient.Close)
       })[,c("a1", "a2", "weight")] #only keep edge fields to match above (plyr returns original fields, too)
   
   partner_egoedges <- adply(partner_actors, 1, function(rdf) {
-        data.frame(a1=partner_altername, a2=rdf$name, weight=rdf$partner.Close_num)
+        data.frame(a1=partner_altername, a2=rdf$name, weight=rdf$partner.Close)
       })[,c("a1", "a2", "weight")] #only keep edge fields to match above (plyr returns original fields, too)
   
   #screen for 1) self connections (invalid) and 2) overlapping ratings of alters
@@ -669,23 +515,35 @@ for (id in unique(idsplit[,1])) {
     combined_edges_prefpatient <- combined_edges_prefpartner <- combined_edges_avgratings <- rbind(patient_edges, partner_edges) #no overlap
   }
   
+  #create versions where the dyad members have been removed (consistent with ego-centered analyses)
+   
+  combined_edges_prefpatient_nodyad <- subset(combined_edges_prefpatient, (!a1 %in% dyadnames) & (!a2 %in% dyadnames))
+  combined_edges_prefpartner_nodyad <- subset(combined_edges_prefpartner, (!a1 %in% dyadnames) & (!a2 %in% dyadnames))
+  combined_edges_avgratings_nodyad <- subset(combined_edges_avgratings, (!a1 %in% dyadnames) & (!a2 %in% dyadnames))
+  
   #deprecate straight combination since this leads to multiple edges for a given connnection
   #combined_edges <- rbind(patient_edges, partner_edges)
   
   couple_graphs[[id]] <- list(PTNUM=as.integer(id),
-      actors=combined_actors, 
+      actors=combined_actors,
+      actors_nodyad=combined_actors_nodyad,
       edges_prefpatient=combined_edges_prefpatient,
       edges_prefpartner=combined_edges_prefpartner,
       edges_avgratings=combined_edges_avgratings,
-      patient_partnerclose=with(patient$actors, Close_num[partner=="yes"]), 
-      partner_patientclose=with(partner$actors, Close_num[partner=="yes"])
+      edges_prefpatient_nodyad=combined_edges_prefpatient_nodyad,
+      edges_prefpartner_nodyad=combined_edges_prefpartner_nodyad,
+      edges_avgratings_nodyad=combined_edges_avgratings_nodyad,
+      patient_partnerclose=with(patient$actors, Close[partner=="yes"]), 
+      partner_patientclose=with(partner$actors, Close[partner=="yes"])
   )
   
 }
 
 stopCluster(cl_fork)
 
-save(couple_graphs, graphlist, couple_match, sna, sna_agg, sna_merge, other, file="data/SNA_Processed_6Apr2015.RData")
+save(couple_graphs, graphlist, couple_match, sna, sna_agg, sna_merge, couples_baseline_clin, file="data/SNA_Processed_27Jul2017.RData")
+
+load(file="data/SNA_Processed_27Jul2017.RData")
 
 ##GENERATE EGO-CENTERED NETWORK METRICS
 vertex_agg <- c()
@@ -742,11 +600,22 @@ for (p in graphlist) {
   betweenness_binary_3 <- betweenness(gbin3, normalize=TRUE)*100
   
   #do alters connect with each other because of similarities on vertex attributes? (esp. attachment
-  attach_assortativity <- assortativity(gthresh2, V(g)$attach_total)
-  angry_assortativity <- assortativity(gthresh2, V(g)$Angry_num)
-  yearsknown_assortativity <- assortativity(gthresh2, V(g)$YrsKnwn)
+  attach_assortativity_2 <- assortativity(gthresh2, V(g)$attach_total)
+  angry_assortativity_2 <- assortativity(gthresh2, V(g)$Angry)
+  happy_assortativity_2 <- assortativity(gthresh2, V(g)$Happy)
+  yearsknown_assortativity_2 <- assortativity(gthresh2, V(g)$YrsKnown)
+  cutoff_assortativity_2 <- assortativity_nominal(gthresh2, factor(V(g)$CutOff))
+  emotion_assortativity_2 <- assortativity_nominal(gthresh2, factor(V(g)$Emotion))
+  romance_assortativity_2 <- assortativity_nominal(gthresh2, factor(V(g)$Romance))
   
-  #TODO: add romance, cutoff, happy, and emotion (categorical) to list of attributes to test for assortativity
+  attach_assortativity_3 <- assortativity(gthresh3, V(g)$attach_total)
+  angry_assortativity_3 <- assortativity(gthresh3, V(g)$Angry)
+  happy_assortativity_3 <- assortativity(gthresh3, V(g)$Happy)
+  yearsknown_assortativity_3 <- assortativity(gthresh3, V(g)$YrsKnown)
+  cutoff_assortativity_3 <- assortativity_nominal(gthresh3, factor(V(g)$CutOff))
+  emotion_assortativity_3 <- assortativity_nominal(gthresh3, factor(V(g)$Emotion))
+  romance_assortativity_3 <- assortativity_nominal(gthresh3, factor(V(g)$Romance))
+  
   #also consider whether to test each attachment item separately here.
   
   #something to consider adding: number of cohesive blocks
@@ -855,9 +724,20 @@ for (p in graphlist) {
       centralization_degree_3=centralization_degree_3,
       centralization_eigenvector_2=centralization_eigenvector_2,
       centralization_eigenvector_3=centralization_eigenvector_3,
-      attach_assortativity=attach_assortativity,
-      angry_assortativity=angry_assortativity,
-      yearsknown_assortativity=yearsknown_assortativity,
+      attach_assortativity_2=attach_assortativity_2,
+      angry_assortativity_2=angry_assortativity_2,
+      happy_assortativity_2=happy_assortativity_2,
+      yearsknown_assortativity_2=yearsknown_assortativity_2,
+      cutoff_assortativity_2=cutoff_assortativity_2,
+      emotion_assortativity_2=emotion_assortativity_2,
+      romance_assortativity_2=romance_assortativity_2,
+      attach_assortativity_3=attach_assortativity_3,
+      angry_assortativity_3=angry_assortativity_3,
+      happy_assortativity_3=happy_assortativity_3,
+      yearsknown_assortativity_3=yearsknown_assortativity_3,
+      cutoff_assortativity_3=cutoff_assortativity_3,
+      emotion_assortativity_3=emotion_assortativity_3,
+      romance_assortativity_3=romance_assortativity_3,
       largest_clique_size_2=length(largest_cliques_2[[1]]),
       largest_clique_size_3=length(largest_cliques_3[[1]]),
       num_maximal_3cliques_2=length(maximal_3cliques_2),
@@ -887,16 +767,13 @@ for (p in graphlist) {
   
 }
 
-save(graph_agg, vertex_agg, file="data/ego_graph_measures.RData")
-
+save(graph_agg, vertex_agg, file="data/ego_graph_measures_27Jul2017.RData")
 
 couple_vertex_metrics <- c()
 couple_graph_metrics <- c()
 
 ##DYADIC METRICS
 for (p in couple_graphs) {
-  #consider whether to include ego-based edges since we may not consider an alter truly connected to ego if the closeness rating is weak 
-  #g <- graph.data.frame(p$edges_withego, directed=FALSE, vertices=p$actors_withego)
   
   p$actors$role_cat <- factor(sapply(p$actors$role, function(x) { 
             if (x %in% c("patient_only", "patient")) { "patient" 
@@ -904,6 +781,15 @@ for (p in couple_graphs) {
             } else "shared"
           }))
   g <- graph.data.frame(p$edges_avgratings, directed=FALSE, vertices=p$actors)
+  
+  #note that _nodyad would need to be removed to include edges rated by the dyad members
+  
+#  p$actors_nodyad$role_cat <- factor(sapply(p$actors_nodyad$role, function(x) { 
+#            if (x %in% c("patient_only", "patient")) { "patient" 
+#            } else if (x %in% c("partner_only", "partner")) { "partner"
+#            } else "shared"
+#          }))
+#  g <- graph.data.frame(p$edges_avgratings_nodyad, directed=FALSE, vertices=p$actors_nodyad)
   #print(g, e=TRUE, v=TRUE)
   
   #remove any connections that are not close at all
@@ -949,6 +835,7 @@ for (p in couple_graphs) {
   betweenness_weighted_3 <- betweenness(gthresh3, normalize=TRUE)*100
   betweenness_binary_3 <- betweenness(gbin3, normalize=TRUE)*100
   
+  #not relevant for _nodyad variant
   couple_edge <- get.edge.ids(gthresh2, c(V(gthresh2)$name[V(gthresh2)$role=="partner"], V(gthresh2)$name[V(gthresh2)$role == "patient"]))
   edge_betweenness_weighted_2 <- edge.betweenness(gthresh2, couple_edge)
   edge_betweenness_binary_2 <- edge.betweenness(gbin2, couple_edge)
@@ -958,10 +845,10 @@ for (p in couple_graphs) {
   #do alters connect with each other because of similarities on vertex attributes? (esp. attachment
   #not relevant to couple? Since we have different ratings
   #attach_assortativity <- assortativity(gthresh2, V(g)$attach_total)
-  #angry_assortativity <- assortativity(gthresh2, V(g)$Angry_num)
-  #yearsknown_assortativity <- assortativity(gthresh2, V(g)$YrsKnwn)
-  nomination_assortativity_2 <- assortativity.nominal(gthresh2, V(g)$role_cat)
-  nomination_assortativity_3 <- assortativity.nominal(gthresh3, V(g)$role_cat)
+  #angry_assortativity <- assortativity(gthresh2, V(g)$Angry)
+  #yearsknown_assortativity <- assortativity(gthresh2, V(g)$YrsKnown)
+  nomination_assortativity_2 <- assortativity_nominal(gthresh2, factor(V(g)$role_cat))
+  nomination_assortativity_3 <- assortativity_nominal(gthresh3, factor(V(g)$role_cat))
   
   #TODO: add romance, cutoff, happy, and emotion (categorical) to list of attributes to test for assortativity
   #also consider whether to test each attachment item separately here.
@@ -1040,6 +927,7 @@ for (p in couple_graphs) {
   vertex_measures <- data.frame(
       PTNUM=p$PTNUM,
       alter_name=V(g)$name,
+      role=V(g)$role, #add the patient, partner, patient_only, partner_only, shared 
       degree_2=degree_2,
       degree_3=degree_3,
       strength_2=strength_2,
@@ -1108,4 +996,5 @@ for (p in couple_graphs) {
   
 }
 
-save(couple_graph_metrics, couple_vertex_metrics, file="data/couple_graph_measures.RData")
+save(couple_graph_metrics, couple_vertex_metrics, file="data/couple_graph_measures_27Jul2017.RData")
+#save(couple_graph_metrics, couple_vertex_metrics, file="data/couple_graph_measures_nodyad_15Oct2015.RData")

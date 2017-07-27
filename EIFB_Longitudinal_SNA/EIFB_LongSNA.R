@@ -1,9 +1,9 @@
 library(foreign)
 library(plyr)
-setwd("/Users/michael/Tresors/PD_SNA/EIFB_Longitudinal_SNA")
+setwd("/Users/josefrijoles/Tresors/PD_SNA/EIFB_Longitudinal_SNA")
 
-newalters <- read.spss("data/SNA new alters 2.12.14.sav", to.data.frame=TRUE)
-sna <- read.spss("data/SNA intake&followup 2.12.14.sav", to.data.frame=TRUE)
+newalters <- read.spss("/Users/josefrijoles/Tresors/PD_SNA/EIFB_Longitudinal_SNA/data/SNA new alters 2.12.14.sav", to.data.frame=TRUE)
+sna <- read.spss("Users/josefrijoles/Tresors/PD_SNA/EIFB_Longitudinal_SNA/data/SNA intake&followup 2.12.14.sav", to.data.frame=TRUE)
 
 #order by ptnum, month
 newalters <- newalters[order(newalters$PTNUM, newalters$Month),]
@@ -133,3 +133,5 @@ str(sna[which(sna$PTNUM %in% missprxsk$PTNUM & sna$AlterID %in% missprxsk$AlterI
 
 #7084 is missing records at 3, 6, and 9 -- maybe worth dropping altogether
 subset(sna, PTNUM==7084)
+
+
