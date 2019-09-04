@@ -10,16 +10,17 @@ library(reshape2)
 setwd("/Users/michael/Tresors/PD_SNA/Couples_Baseline_SNA")
 source(file.path(getMainDir(), "Miscellaneous", "Global_Functions.R"))
 source("code/APIM_Functions.R")
-load(file="data/SNA_Processed_6Oct2015.RData")
-load(file="data/selfreports/couples_baseline_clinical_9Oct2015.RData")
+load(file="data/SNA_Processed_27Jul2017.RData")
+load(file="data/selfreports/couples_baseline_clinical_27Jul2017.RData")
 
 #look at relationship satisfaction as a function of BPD etc.
 couples_baseline_clin <- subset(couples_baseline_clin, PTNUM %in% unique(sna$PTNUM))
 
-corstarsl(couples_baseline_clin[,c("DASCon", "DASSat", "DASCoh", "DASAffExp", "DASTotal", "PhysAssV", "PhysAssP", "PsychAggV", "PsychAggP", "Perp", "Victim")])
-predstocenter <- c("PAIBORtot", "iip_agency", "iip_communion", "IIP_PD1", "IIP_PD2", "IIP_PD3", "ECRanx", "ECRavoid", "DASTotal", 
-    "Victim", "Perp", "PsychAggV", "PsychAggP", "PhysAssV", "PhysAssP", "bordl_sidp", "narci_sidp", "antso_sidp", "avoid_sidp", "OPD_sidp", "depen_sidp", "parnd_sidp", "histr_sidp",
-    "nobpd")
+corstarsl(couples_baseline_clin[,c("DASCon", "DASSat", "DASCoh", "DASAffExp", "DASTotal", "CTS_PhysAssV", "CTS_PhysAssP", "CTS_PsychAggV", "CTS_PsychAggP", "CTS_Perp", "CTS_Victim")])
+corstarsl(couples_baseline_clin[,c("IIP_agency", "IIP_communion", "IIP_pd1", "IIP_pd2", "IIP_pd3")])
+predstocenter <- c("PAIBORtot", "IIP_agency", "IIP_communion", "IIP_pd1", "IIP_pd2", "IIP_pd3", "ECRanx", "ECRavoid", "DASTotal", 
+    "CTS_Victim", "CTS_Perp", "CTS_PsychAggV", "CTS_PsychAggP", "CTS_PhysAssV", "CTS_PhysAssP", "bordl_sidp", "narci_sidp", 
+    "antso_sidp", "avoid_sidp", "OPD_sidp", "depen_sidp", "parnd_sidp", "histr_sidp", "nobpd")
 
 couples_baseline_clin <- f_centerPredictors(couples_baseline_clin, predstocenter, addsuffix=".c")
 couples_clin_wide <- f_centerPredictors(couples_clin_wide, as.vector(outer(predstocenter, c("0", "1"), paste, sep="_")), addsuffix=".c")
@@ -42,7 +43,7 @@ sna_merge$YrsKnown[which(sna_merge$YrsKnown == -1)] <- 0 #less than one year sho
 sna_merge$PTNUM <- as.numeric(as.character(sna_merge$PTNUM))
 sna_merge$UsrID <- as.numeric(as.character(sna_merge$UsrID))
 sna_merge$pastRom <- as.numeric(sna_merge$Romance=="past") #only about 5%... not a lot to work with
-sna_merge$pdtot <- sna_merge$bordl_sidp + sna_merge$OPD_sidp
+sna_merge$pdtot <- sna_merge$bordl_sidp + sna_merge$nobpd
 sna_merge$nonarc <- with(sna_merge, szoid_sidp + stypl_sidp + parnd_sidp + histr_sidp + bordl_sidp +
         antso_sidp + obcmp_sidp + depen_sidp + avoid_sidp) #non-narc Sx
 sna_merge$attach_figure <- as.numeric(sna_merge$attach_figure) #was stored as logical upstream
@@ -55,9 +56,9 @@ vertex_wide <- dcast(vertex_melt, PTNUM + alter_num ~ variable + DyadID)
 
 ##At the moment, Mplus seems like the only way to get this done
 #shorten some key variable names
-vertex_wide <- plyr::rename(vertex_wide, c(iip_communion_0="aff_0", iip_communion_1="aff_1",
-        iip_agency_0="dom_0", iip_agency_1="dom_1",
-        iip_elevation_0="iipe_0", iip_elevation_1="iipe_1",
+vertex_wide <- plyr::rename(vertex_wide, c(IIP_communion_0="aff_0", IIP_communion_1="aff_1",
+        IIP_agency_0="dom_0", IIP_agency_1="dom_1",
+        IIP_elevation_0="IIPe_0", IIP_elevation_1="IIPe_1",
         szoid_sidp_0="sz_0", szoid_sidp_1="sz_1",
         stypl_sidp_0="styp_0", stypl_sidp_1="styp_1",
         parnd_sidp_0="par_0", parnd_sidp_1="par_1",
@@ -68,9 +69,9 @@ vertex_wide <- plyr::rename(vertex_wide, c(iip_communion_0="aff_0", iip_communio
         avoid_sidp_0="avd_0", avoid_sidp_1="avd_1",
         depen_sidp_0="depen_0", depen_sidp_1="depen_1",
         obcmp_sidp_0="obcmp_0", obcmp_sidp_1="obcmp_1",
-        IIP_PD1_0="pd1_0", IIP_PD1_1="pd1_1",
-        IIP_PD2_0="pd2_0", IIP_PD2_1="pd2_1",
-        IIP_PD3_0="pd3_0", IIP_PD3_1="pd3_1",
+        IIP_pd1_0="pd1_0", IIP_pd1_1="pd1_1",
+        IIP_pd2_0="pd2_0", IIP_pd2_1="pd2_1",
+        IIP_pd3_0="pd3_0", IIP_pd3_1="pd3_1",
         PAIBORtot_0="pbor_0", PAIBORtot_1="pbor_1",
         attach_figure_0="afig_0", attach_figure_1="afig_1",
         attach_total_0="arat_0", attach_total_1="arat_1",
@@ -81,7 +82,11 @@ vertex_wide <- plyr::rename(vertex_wide, c(iip_communion_0="aff_0", iip_communio
 ##Cutoff analyses
 output <- mplusMLAPIM(vertex_wide, "CutOff", "dom", categorical=TRUE)
 output <- mplusMLAPIM(vertex_wide, "CutOff", "aff", categorical=TRUE)
-output <- mplusMLAPIM(vertex_wide, "CutOff", c("aff", "dom", "iipe"), categorical=TRUE) #dom and iipe associated with more cutoffs
+output <- mplusMLAPIM(vertex_wide, "CutOff", c("aff", "dom", "IIPe"), categorical=TRUE) #dom and IIPe associated with more cutoffs
+output <- mplusMLAPIM(vertex_wide, "CutOff", "pd1", categorical=TRUE) #interpersonal sensitivity; all actor effects
+output <- mplusMLAPIM(vertex_wide, "CutOff", "pd2", categorical=TRUE) #ambivalence; all actor effects
+output <- mplusMLAPIM(vertex_wide, "CutOff", "pd3", categorical=TRUE) #aggression; all actor effects
+output <- mplusMLAPIM(vertex_wide, "CutOff", c("pd1", "pd2", "pd3"), categorical=TRUE) #combined
 
 output <- mplusMLAPIM(vertex_wide, "CutOff", "par", categorical=TRUE) #both actor effects, indistinguishable
 output <- mplusMLAPIM(vertex_wide, "CutOff", "sz", categorical=TRUE) #both actor effects, mostly indistinguishable (slight partner effect in free)
@@ -94,9 +99,6 @@ output <- mplusMLAPIM(vertex_wide, "CutOff", "avd", categorical=TRUE) #NULL effe
 output <- mplusMLAPIM(vertex_wide, "CutOff", "depen", categorical=TRUE) #NULL effects
 output <- mplusMLAPIM(vertex_wide, "CutOff", "obcmp", categorical=TRUE) #NULL effects
 output <- mplusMLAPIM(vertex_wide, "CutOff", "OPD_sidp", categorical=TRUE) #both actor effects, indistinguishable
-output <- mplusMLAPIM(vertex_wide, "CutOff", "pd1", categorical=TRUE) #interpersonal sensitivity; mostly actor effects
-output <- mplusMLAPIM(vertex_wide, "CutOff", "pd2", categorical=TRUE) #ambivalence; mostly actor effects
-output <- mplusMLAPIM(vertex_wide, "CutOff", "pd3", categorical=TRUE) #aggression; all actor effects
 output <- mplusMLAPIM(vertex_wide, "CutOff", c("pd1", "pd3"), categorical=TRUE) #aggression; mostly actor effects
 output <- mplusMLAPIM(vertex_wide, "CutOff", c("bpd", "nar", "ant"), categorical=TRUE) #aggression; mostly actor effects
 output <- mplusMLAPIM(vertex_wide, "CutOff", "OPD_sidp", categorical=TRUE) #both actor and partner effects here.
@@ -106,6 +108,7 @@ output <- mplusMLAPIM(vertex_wide, "CutOff", c("bpd", "nobpd"), categorical=TRUE
 output <- mplusMLAPIM(vertex_wide, "CutOff", c("nar", "nonarc"), categorical=TRUE) #this may be the most relevant approach given the sampling scheme
 
 #Anger analyses (treat as Poisson)
+#TODO: double check that we exclude the patient and partner from ratings
 output <- mplusMLAPIM(vertex_wide, "Angry", "OPD_sidp", count=TRUE) #NULL
 output <- mplusMLAPIM(vertex_wide, "Angry", "bpd", count=TRUE) #NULL  
 output <- mplusMLAPIM(vertex_wide, "Angry", "pdtot", count=TRUE) #NULL
@@ -114,7 +117,17 @@ output <- mplusMLAPIM(vertex_wide, "Angry", "pbor", count=TRUE) #NULL (self-repo
 output <- mplusMLAPIM(vertex_wide, "Angry", "nar", count=TRUE) #only marginal here -- see ZIP model output created manually
 output <- mplusMLAPIM(vertex_wide, "Angry", c("nar", "nonarc"), count=TRUE) #include nonarc
 
-output <- mplusMLAPIM(vertex_wide, "Angry", c("dom", "aff", "iipe"), count=TRUE)
+output_poi <- mplusMLAPIM(vertex_wide, "Angry", c("dom", "aff", "IIPe"), count=TRUE)
+output_zip <- mplusMLAPIM(vertex_wide, "Angry", c("dom", "aff", "IIPe"), zip=TRUE)
+output_poi$indistinguishable$parameters$unstandardized
+output_zip$indistinguishable$parameters$unstandardized
+output_poi$indistinguishable$summaries$AICC
+output_zip$indistinguishable$summaries$AICC
+
+output <- mplusMLAPIM(vertex_wide, "Angry", c("dom"), count=TRUE)
+output <- mplusMLAPIM(vertex_wide, "Angry", c("dom"), zip=TRUE)
+output <- mplusMLAPIM(vertex_wide, "Angry", c("aff"), count=TRUE) #no dice
+output <- mplusMLAPIM(vertex_wide, "Angry", c("IIPe"), count=TRUE) #actor and partner effects, some evidence of distinguishability of dyads
 
 #MLM approach
 #anger as a function of BPD Sx
@@ -161,7 +174,9 @@ output <- mplusMLAPIM(vertex_wide, "Happy", c("pbor", "OPD_sidp")) #OPD beats se
 output <- mplusMLAPIM(vertex_wide, "Happy", c("nar"))
 output <- mplusMLAPIM(vertex_wide, "Happy", c("nar", "nonarc")) #Partner effect remains after controlling for lower happiness nonarc actor effect
 
-output <- mplusMLAPIM(vertex_wide, "Happy", c("iipe", "aff", "dom"))
+output <- mplusMLAPIM(vertex_wide, "Happy", c("IIPe", "aff", "dom"))
+
+output <- mplusMLAPIM(vertex_wide, "Happy", c("IIPe", "aff", "dom"))
 
 
 summary(mnest <- lmer(Happy ~ narci_sidp.c * DyadID + (1 | UsrID) + (1 | PTNUM), data=sna_merge, REML=TRUE))
@@ -174,6 +189,8 @@ output <- mplusMLAPIM(vertex_wide, "pastRom", c("OPD_sidp"), categorical=TRUE) #
 output <- mplusMLAPIM(vertex_wide, "pastRom", c("bpd"), categorical=TRUE) #holds for BPD proper
 output <- mplusMLAPIM(vertex_wide, "pastRom", c("bpd", "OPD_sidp"), categorical=TRUE) #basically washes out when controlling for OPD
 output <- mplusMLAPIM(vertex_wide, "pastRom", c("nar", "nonarc"), categorical=TRUE) #kind of a mess here... no consistency
+
+output <- mplusMLAPIM(vertex_wide, "pastRom", c("IIPe", "aff", "dom"), categorical=TRUE) #kind of a mess here... no consistency
 
 summary(mnest <- glmer(pastRom ~ narci_sidp.c * DyadID + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial))
 summary(mnest <- glmer(pastRom ~ bordl_sidp.c * DyadID + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial)) #holds up in MLM
@@ -226,7 +243,7 @@ output <- mplusMLAPIM(vertex_wide, "Close", c("pdtot"))
 output <- mplusMLAPIM(vertex_wide, "Close", c("bpd"))
 output <- mplusMLAPIM(vertex_wide, "Close", c("bpd", "OPD_sidp")) #opd Sx associated with lower closeness ratings
 output <- mplusMLAPIM(vertex_wide, "Close", c("nar", "nonarc")) #
-
+output <- mplusMLAPIM(vertex_wide, "Close", c("aff", "dom")) #
 
 
 
@@ -285,27 +302,27 @@ sna_merge$Cutoff_num <- sapply(sna_merge$Cutoff, function(x) { if (is.na(x)) x e
 mcutoff <- glmer(CutOff ~ ECRanx.c*PAIBORtot.c + ECRavoid.c*PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
 summary(mcutoff)
 
-mcutoff <- glmer(CutOff ~ iip_agency.c*PAIBORtot.c + iip_agency.c*PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
+mcutoff <- glmer(CutOff ~ IIP_agency.c*PAIBORtot.c + IIP_agency.c*PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
 summary(mcutoff)
 
-mcutoff <- glmer(CutOff ~ iip_agency.c + iip_communion.c + ECRanx.c + ECRavoid.c + PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
+mcutoff <- glmer(CutOff ~ IIP_agency.c + IIP_communion.c + ECRanx.c + ECRavoid.c + PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
 summary(mcutoff)
 
-mcutoff <- glmer(CutOff ~ iip_agency.c + iip_communion.c + bordl_sidp.c + narci_sidp.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
+mcutoff <- glmer(CutOff ~ IIP_agency.c + IIP_communion.c + bordl_sidp.c + narci_sidp.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
 summary(mcutoff)
 
-mcutoff <- glmer(CutOff ~ iip_agency.c + iip_communion.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
+mcutoff <- glmer(CutOff ~ IIP_agency.c + IIP_communion.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
 summary(mcutoff)
 
-prepareMplusData(sna_merge, filename="cutoff_test.dat", keepCols=c("UsrID", "PTNUM", "CutOff", "iip_agency.c", "iip_communion.c",
+prepareMplusData(sna_merge, filename="cutoff_test.dat", keepCols=c("UsrID", "PTNUM", "CutOff", "IIP_agency.c", "IIP_communion.c",
         "bordl_sidp.c", "narci_sidp.c"), inpfile="cutoff_test.inp")
 
-prepareMplusData(vertex_wide, filename="cutoff_test_wide.dat", keepCols=c("PTNUM", "CutOff_0", "CutOff_1", "iip_agency.c_0", 
-        "iip_agency.c_1"), inpfile="cutoff_test_wide.inp")
+prepareMplusData(vertex_wide, filename="cutoff_test_wide.dat", keepCols=c("PTNUM", "CutOff_0", "CutOff_1", "IIP_agency.c_0", 
+        "IIP_agency.c_1"), inpfile="cutoff_test_wide.inp")
     
     
     
-    mcutoff <- glmer(CutOff ~ iip_communion.c*PAIBORtot.c + iip_communion.c*PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
+    mcutoff <- glmer(CutOff ~ IIP_communion.c*PAIBORtot.c + IIP_communion.c*PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), data=sna_merge, family=binomial, nAGQ=1)
 summary(mcutoff)
 
 

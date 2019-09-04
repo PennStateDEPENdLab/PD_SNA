@@ -4,7 +4,8 @@ library(foreign)
 library(psych)
 library(lavaan)
 library(plyr)
-setwd("/Users/michael/Tresors/PD_SNA/Couples_Baseline_SNA")
+setwd("/Users/mnh5174/Tresors/PD_SNA/Couples_Baseline_SNA")
+#setwd("/Users/mnh5174/Box_Sync/DEPENd/Projects/PD_SNA/")
 
 #Old approach where Kim had done some sort of minimal data reshaping to create group file.
 #sna_old <- read.spss("data/SNA alter summary 8000-8094 3.24.15.sav", to.data.frame=TRUE)
@@ -20,7 +21,7 @@ alter_summaries <- list.files("data/ties", pattern="alter_summary.csv", recursiv
 alter_summaries <- alter_summaries[!grepl("6mo", alter_summaries, ignore.case=TRUE)]
 f_PTNUM <- as.numeric(sub(".*/ties/(\\d+)/.*", "\\1", alter_summaries, perl=TRUE))
 tab <- table(f_PTNUM) #look for summaries !=2
-badids <- which(f_PTNUM %in% c(names(tab[which(tab != 2)]), "8144", "8030")) #8144 has corrupt alter summary at the moment
+badids <- which(f_PTNUM %in% c(names(tab[which(tab != 2)]), "8144")) #8144 has corrupt alter summary at the moment
 alter_summaries[badids]
 alter_summaries <- alter_summaries[-1*badids]
 f_PTNUM <- f_PTNUM[-1*badids]
@@ -50,7 +51,9 @@ sna$relationship <- factor(sna$relationship, levels=c(1:12),
         "work or school together", "neighbor", "religious affiliation", "shared hobby or interest",
         "treatment group or provider", "close friend", "childhood friend", "acquaintance or friend of friend", "other"))
 
-
+write.csv(file="relationship_labels.csv", row.names=FALSE, x=data.frame(numeric_code=1:12, label=c("family", "romantic partner (current or former)", "romantic partner's family",
+                                      "work or school together", "neighbor", "religious affiliation", "shared hobby or interest",
+                                      "treatment group or provider", "close friend", "childhood friend", "acquaintance or friend of friend", "other")))
 table(sna$prxsk)
 table(sna$sepds)
 table(sna$sfhvn)
@@ -116,7 +119,7 @@ sna_agg <- ddply(sna, .(UsrID), function(subdf) {
 
 
 sna_merge <- merge(sna, couples_baseline_clin[,c("UsrID", "p_sex", "p_age", "ECRanx", "ECRavoid", "PAIBORaffe", "PAIBORiden", "PAIBORnegr", "PAIBORtot", 
-            "IIP_PD1", "IIP_PD2", "IIP_PD3", "iip_agency", "iip_communion", "iip_elevation")], all.x=TRUE, by="UsrID")
+            "IIP_pd1", "IIP_pd2", "IIP_pd3", "IIP_agency", "IIP_communion", "IIP_elevation")], all.x=TRUE, by="UsrID")
 setdiff(unique(sna$PTNUM), unique(couples_baseline_clin$PTNUM)) #has SNA but no clinical
 setdiff(unique(couples_baseline_clin$PTNUM), unique(sna$PTNUM)) #has clinical but no SNA
 
@@ -248,8 +251,10 @@ couple_match <- lapply(couple_split, function(subdf) {
 #8030 only has 25 alters
 
 #output file of matches for manual checks
-sink(file="couple_altermatch_27Jul2017.txt", append=FALSE)
-print(couple_match)
+sink(file="couple_altermatch_25Oct2017.txt", append=FALSE)
+#remove the idlist element for clarity
+noidlist <- lapply(couple_match, function(co) { co$idlist <- NULL; co })
+print(noidlist)
 sink()
 
 ##STEP 2: IMPORT CLOSENESS RATINGS AMONG ALTERS FOR EACH PARTICIPANT TO BUILD EGO/DYAD NETWORK
@@ -315,6 +320,9 @@ for (f in 1:length(weighted_matrices)) {
       patient <- 0
       closest_alter <- adist_to_partner
     }
+    
+    #NB. At present, an age check does not enter into the matching algorithm at this step, just at the sorting step in the first algorithm!
+    #I hope that by checking the output at step 1, we avoid too many errors, but should probably reintroduce age check at this step as a warning or secondary criterion.
     
     #this is the list of shared names (matching alter summary) in the order of the ties matrix
     #use this, not the names in the csv file, to create the adjacency list
@@ -775,21 +783,21 @@ couple_graph_metrics <- c()
 ##DYADIC METRICS
 for (p in couple_graphs) {
   
-  p$actors$role_cat <- factor(sapply(p$actors$role, function(x) { 
-            if (x %in% c("patient_only", "patient")) { "patient" 
-            } else if (x %in% c("partner_only", "partner")) { "partner"
-            } else "shared"
-          }))
-  g <- graph.data.frame(p$edges_avgratings, directed=FALSE, vertices=p$actors)
-  
-  #note that _nodyad would need to be removed to include edges rated by the dyad members
-  
-#  p$actors_nodyad$role_cat <- factor(sapply(p$actors_nodyad$role, function(x) { 
+#  p$actors$role_cat <- factor(sapply(p$actors$role, function(x) { 
 #            if (x %in% c("patient_only", "patient")) { "patient" 
 #            } else if (x %in% c("partner_only", "partner")) { "partner"
 #            } else "shared"
 #          }))
-#  g <- graph.data.frame(p$edges_avgratings_nodyad, directed=FALSE, vertices=p$actors_nodyad)
+#  g <- graph.data.frame(p$edges_avgratings, directed=FALSE, vertices=p$actors)
+  
+  #note that _nodyad would need to be removed to include edges rated by the dyad members
+  
+  p$actors_nodyad$role_cat <- factor(sapply(p$actors_nodyad$role, function(x) { 
+            if (x %in% c("patient_only", "patient")) { "patient" 
+            } else if (x %in% c("partner_only", "partner")) { "partner"
+            } else "shared"
+          }))
+  g <- graph.data.frame(p$edges_avgratings_nodyad, directed=FALSE, vertices=p$actors_nodyad)
   #print(g, e=TRUE, v=TRUE)
   
   #remove any connections that are not close at all
@@ -836,11 +844,11 @@ for (p in couple_graphs) {
   betweenness_binary_3 <- betweenness(gbin3, normalize=TRUE)*100
   
   #not relevant for _nodyad variant
-  couple_edge <- get.edge.ids(gthresh2, c(V(gthresh2)$name[V(gthresh2)$role=="partner"], V(gthresh2)$name[V(gthresh2)$role == "patient"]))
-  edge_betweenness_weighted_2 <- edge.betweenness(gthresh2, couple_edge)
-  edge_betweenness_binary_2 <- edge.betweenness(gbin2, couple_edge)
-  edge_betweenness_weighted_3 <- edge.betweenness(gthresh3, couple_edge)
-  edge_betweenness_binary_3 <- edge.betweenness(gbin3, couple_edge)
+#  couple_edge <- get.edge.ids(gthresh2, c(V(gthresh2)$name[V(gthresh2)$role=="partner"], V(gthresh2)$name[V(gthresh2)$role == "patient"]))
+#  edge_betweenness_weighted_2 <- edge.betweenness(gthresh2, couple_edge)
+#  edge_betweenness_binary_2 <- edge.betweenness(gbin2, couple_edge)
+#  edge_betweenness_weighted_3 <- edge.betweenness(gthresh3, couple_edge)
+#  edge_betweenness_binary_3 <- edge.betweenness(gbin3, couple_edge)
   
   #do alters connect with each other because of similarities on vertex attributes? (esp. attachment
   #not relevant to couple? Since we have different ratings
@@ -984,11 +992,11 @@ for (p in couple_graphs) {
       avgpath_2=avgpath_2,
       avgpath_3=avgpath_3,
       smallworld_2=smallworld_2,
-      smallworld_3=smallworld_3,
-      edge_betweenness_weighted_2=edge_betweenness_weighted_2,
-      edge_betweenness_weighted_3=edge_betweenness_weighted_3,
-      edge_betweenness_binary_2=edge_betweenness_binary_2,
-      edge_betweenness_binary_3=edge_betweenness_binary_3 #NB: The edge betweenness measures are in graph because they are just for the EBC for the couple edge
+      smallworld_3=smallworld_3
+#      edge_betweenness_weighted_2=edge_betweenness_weighted_2,
+#      edge_betweenness_weighted_3=edge_betweenness_weighted_3,
+#      edge_betweenness_binary_2=edge_betweenness_binary_2,
+#      edge_betweenness_binary_3=edge_betweenness_binary_3 #NB: The edge betweenness measures are in graph because they are just for the EBC for the couple edge
   )
   
   couple_graph_metrics <- rbind(couple_graph_metrics, graph_measures)
@@ -996,5 +1004,5 @@ for (p in couple_graphs) {
   
 }
 
-save(couple_graph_metrics, couple_vertex_metrics, file="data/couple_graph_measures_27Jul2017.RData")
-#save(couple_graph_metrics, couple_vertex_metrics, file="data/couple_graph_measures_nodyad_15Oct2015.RData")
+#save(couple_graph_metrics, couple_vertex_metrics, file="data/couple_graph_measures_27Jul2017.RData")
+save(couple_graph_metrics, couple_vertex_metrics, file="data/couple_graph_measures_nodyad_27Jul2017.RData")

@@ -3,7 +3,7 @@ library(foreign)
 library(plyr)
 library(reshape2)
 library(dplyr) #load after plyr
-setwd("/Users/michael/Tresors/PD_SNA/Couples_Baseline_SNA")
+setwd("~/Tresors/PD_SNA/Couples_Baseline_SNA")
 source(file.path(getMainDir(), "Miscellaneous", "Global_Functions.R"))
 
 #merge together self-reports etc.
@@ -145,6 +145,7 @@ das <- das %>% filter(mth==0 & PTNUM >= 8000) %>% select(-one_of(c("ADate", "Rec
 #ecr_all <- ecr_all[!duplicated(ecr_all$UsrID, fromLast = FALSE), ] #drop duplicated UsrIDs, preferring earlier row (i.e., older data)
 
 ecr <- read.spss("data/selfreports/INTAKE_20170223/ECR.sav", to.data.frame=TRUE)
+xx <- score_ecr(ecr, item_prefix="ECR", max_impute = 0.5, keep_reverse_codes = TRUE, drop_items = FALSE)
 
 reverseItems <- paste("ECR", c(2, 22, 3, 5, 11,15, 17, 19, 25, 27, 29, 31, 33, 35), sep="")
 ecr[,reverseItems] <- lapply(ecr[,reverseItems], function(x) { 8 - x }) #1-7 scoring
@@ -220,13 +221,34 @@ iip <- iip %>% filter(mth==0 & PTNUM >= 8000) %>% select(-one_of(c("ADate", "Rec
 #sidp_all <- rbind(sidp, sidp_append)
 #sidp_all <- sidp_all[!duplicated(sidp_all$UsrID, fromLast = FALSE), ] #drop duplicated UsrIDs, preferring earlier row (i.e., older data)
 #new dataset has all individuals at baseline
-sidp <- read.spss("data/selfreports/SIDP_scored.10.8.15.sav", to.data.frame=TRUE)
-sidp <- subset(sidp, mth==0 & raterID==0 & ratercode==6) #raterID 0 is case conference; ratercode 6 is case conference; mth 0 is intake
-sidp_all <- sidp[, c("UsrID", "PTNUM", "DyadID", grep(".*_sidp$", names(sidp), value=TRUE), grep(".*Count$", names(sidp), value=TRUE))]
+#sidp <- read.spss("data/selfreports/SIDP_scored.10.8.15.sav", to.data.frame=TRUE)
+#sidp <- subset(sidp, mth==0 & raterID==0 & ratercode==6) #raterID 0 is case conference; ratercode 6 is case conference; mth 0 is intake
+#sidp_all <- sidp[, c("UsrID", "PTNUM", "DyadID", grep(".*_sidp$", names(sidp), value=TRUE), grep(".*Count$", names(sidp), value=TRUE))]
+
+#this is the (final) update from Nate; the above is missing high ids (8140-8155ish) 
+sidp <- read.spss("data/selfreports/INTAKE_20170223/SIDP.sav", to.data.frame=TRUE)
+
+#szoid5 and sztypl8 are stored in same column (assuming it's an identical criterion)
+#but this blows up the logic of the auto scoring below
+sidp <- sidp %>% rename(szoid5=szoid5stypl8) %>% mutate(stypl8=szoid5, UsrID=as.numeric(paste0(PTNUM, DyadID))) %>% 
+    select(-initials, -sectionQpatient, -sectionQinterviewer)
+
+sidp <- filter(sidp, mth==0 & raterID==0 & ratercode==6) #raterID 0 is case conference; ratercode 6 is case conference; mth 0 is intake
+score_pd <- function(df, prefix, dropitems=TRUE) {
+  require(dplyr)
+  for (p in prefix) {
+    tosum <- df %>% select(matches(paste0(p, "\\d+")))
+    df[[paste0(p, "_sidp")]] <- apply(tosum, 1, function(r) { sum(r)})
+    df <- df %>% select(-matches(paste0(p, "\\d+")))
+  }
+  return(df)
+}
+#sort(names(sidp))
+sidp <- score_pd(sidp, c("antso", "avoid", "bordl", "depen", "deprs", "histr", "narci", "negtv", "obcmp", "parnd", "stypl", "szoid"))
+#sidp %>% filter(mth==0) %>% select(starts_with("histr"))
 
 
-#this is the update from Nate, but I believe the above is complete
-#sidp <- read.spss("data/selfreports/INTAKE_20170223/SIDP.sav", to.data.frame=TRUE)
+
 
 #counts are present/absent ratings, whereas dimensional scores account for 0, 1, 2 coding
 #use dimensional (_sidp) for now.
@@ -241,7 +263,7 @@ couples_baseline_clin <- plyr::rename(couples_baseline_clin, c(age="p_age", sex=
 #recode 9999 as missing
 
 #outlier check
-lapply(couples_baseline_clin, function(x) { if (is.numeric(x)) { range(x, na.rm=TRUE) } } )
+#lapply(couples_baseline_clin, function(x) { if (is.numeric(x)) { range(x, na.rm=TRUE) } } )
 
 couples_baseline_clin <- subset(couples_baseline_clin, PTNUM < 9000) #pilot IDs
 
@@ -266,17 +288,17 @@ couples_baseline_clin$pdtot <- with(couples_baseline_clin, szoid_sidp + stypl_si
 couples_baseline_clin$nobpd <- with(couples_baseline_clin, szoid_sidp + stypl_sidp + parnd_sidp + histr_sidp +
         narci_sidp + antso_sidp + obcmp_sidp + depen_sidp + avoid_sidp)
 
-couples_baseline_clin$nobpdCount <- with(couples_baseline_clin, szoidCount + styplCount + parndCount + histrCount +
-        narciCount + antsoCount + obcmpCount + depenCount + avoidCount)
+#couples_baseline_clin$nobpdCount <- with(couples_baseline_clin, szoidCount + styplCount + parndCount + histrCount +
+#        narciCount + antsoCount + obcmpCount + depenCount + avoidCount)
 
 couples_baseline_clin$nonarc <- with(couples_baseline_clin, szoid_sidp + stypl_sidp + parnd_sidp + histr_sidp + bordl_sidp +
         antso_sidp + obcmp_sidp + depen_sidp + avoid_sidp) #non-narc Sx
 
-couples_baseline_clin$nonarcCount <- with(couples_baseline_clin, szoidCount + styplCount + parndCount + histrCount + bordlCount +
-        antsoCount + obcmpCount + depenCount + avoidCount) #non-narc Sx
+#couples_baseline_clin$nonarcCount <- with(couples_baseline_clin, szoidCount + styplCount + parndCount + histrCount + bordlCount +
+#        antsoCount + obcmpCount + depenCount + avoidCount) #non-narc Sx
 
-couples_baseline_clin$allpdCount <- with(couples_baseline_clin, szoidCount + styplCount + parndCount + 
-        bordlCount + narciCount + antsoCount + histrCount + avoidCount + depenCount + obcmpCount)
+#couples_baseline_clin$allpdCount <- with(couples_baseline_clin, szoidCount + styplCount + parndCount + 
+#        bordlCount + narciCount + antsoCount + histrCount + avoidCount + depenCount + obcmpCount)
 
 #save a wide version of the clinical data with _0 and _1 variable name suffix denoting the partner and patient, respectively
 couples_melt <- melt(couples_baseline_clin[,sapply(couples_baseline_clin, is.numeric)], id.vars=c("PTNUM", "DyadID"))

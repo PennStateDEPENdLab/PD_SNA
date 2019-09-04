@@ -58,14 +58,23 @@ runAPIM <- function(df, DV, predictors, partners=c("_0", "_1"), additional="", p
   return(list(syntax=list(i=indistinguishable_syn, a=afree_syn, p=pfree_syn, all=allfree_syn), indistinguishable=indistinguishable, afree=afree, pfree=pfree, allfree=allfree))
 }
 
-mplusMLAPIM <- function(df, DV, predictors, partners=c("_0", "_1"), categorical=FALSE, count=FALSE) {
+mplusMLAPIM <- function(df, DV, predictors, partners=c("_0", "_1"), categorical=FALSE, count=FALSE, zip=FALSE) {
   require(MplusAutomation)
   free <- indistinguishable <- " %BETWEEN%\n "
   for (p in 1:length(predictors)) {
     free <- paste0(free, DV, partners[1], " ON ", predictors[p], partners[1], " ", predictors[p], partners[2], ";\n ",
         DV, partners[2], " ON ", predictors[p], partners[1], " ", predictors[p], partners[2], ";\n")
+    if (zip) {
+      free <- paste0(free, DV, partners[1], "#1 ON ", predictors[p], partners[1], " ", predictors[p], partners[2], ";\n ",
+          DV, partners[2], "#1 ON ", predictors[p], partners[1], " ", predictors[p], partners[2], ";\n")
+    }
     indistinguishable <- paste0(indistinguishable, DV, partners[1], " ON ", predictors[p], partners[1], " (a", p, ")\n ", predictors[p], partners[2], " (p", p, ");\n ",
         DV, partners[2], " ON ", predictors[p], partners[1], " (p", p, ")\n ", predictors[p], partners[2], " (a", p, ");\n")
+    if (zip) {
+      indistinguishable <- paste0(indistinguishable, DV, partners[1], "#1 ON ", predictors[p], partners[1], " (az", p, ")\n ", predictors[p], partners[2], " (pz", p, ");\n ",
+          DV, partners[2], "#1 ON ", predictors[p], partners[1], " (pz", p, ")\n ", predictors[p], partners[2], " (az", p, ");\n")
+    }
+    
   }
   free <- paste0(free, " %WITHIN%\n")
   indistinguishable <- paste0(indistinguishable, " %WITHIN%\n")
@@ -77,7 +86,11 @@ mplusMLAPIM <- function(df, DV, predictors, partners=c("_0", "_1"), categorical=
   #VARIABLE = paste("CLUSTER=PTNUM; \nWITHIN =", paste0(DV, partners, collapse=" "), paste(as.vector(outer(predictors, partners, paste0)), collapse=" "),  ";")
   VARIABLE = paste("CLUSTER=PTNUM; \nBETWEEN =", paste(as.vector(outer(predictors, partners, paste0)), collapse=" "),  ";") #assumes predictors are all between
   if (categorical) { VARIABLE <- paste(VARIABLE, "\n CATEGORICAL = ", paste0(DV, partners, collapse=" "), ";") }
-  if (count) { VARIABLE <- paste(VARIABLE, "\n COUNT = ", paste0(DV, partners, collapse=" "), ";") }
+  if (count) { 
+    VARIABLE <- paste(VARIABLE, "\n COUNT = ", paste0(DV, partners, collapse=" "), ";") 
+  } else if (zip) {
+    VARIABLE <- paste(VARIABLE, "\n COUNT = ", paste0(DV, partners, collapse=" "), " (pi);") #add 'pi' for zero-inflated poisson
+  }
   
   m <- mplusObject(TITLE=paste("MLSEM", DV, "APIM Free"),
       VARIABLE = VARIABLE,

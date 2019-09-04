@@ -9,9 +9,9 @@ library(lattice)
 setwd("/Users/michael/Tresors/PD_SNA/Couples_Baseline_SNA")
 source("code/APIM_Functions.R")
 source(file.path(getMainDir(), "Miscellaneous", "Global_Functions.R"))
-load(file="data/SNA_Processed_6Oct2015.RData")
-load(file="data/ego_graph_measures_6Oct2015.RData")
-load(file="data/selfreports/couples_baseline_clinical_9Oct2015.RData")
+load(file="data/SNA_Processed_27Jul2017.RData")
+load(file="data/ego_graph_measures_27Jul2017.RData")
+load(file="data/selfreports/couples_baseline_clinical_27Jul2017.RData")
 
 mvertex <- merge(vertex_agg, couples_baseline_clin, by=c("UsrID", "PTNUM"), all=FALSE)
 
@@ -28,7 +28,7 @@ vertexAttribs <- do.call(rbind, lapply(graphlist, function(x) {
 mvertex <- merge(mvertex, vertexAttribs[,c("UsrID", "PTNUM", "alter_name", "CutOff", "Close", "Happy", "Angry", "attach_total")],
     by=c("UsrID", "PTNUM", "alter_name"))
 
-predstocenter <- c("PAIBORtot", "iip_agency", "iip_communion", "iip_elevation", "IIP_PD1", "IIP_PD2", "IIP_PD3", "ECRanx", "ECRavoid", "DASTotal", 
+predstocenter <- c("PAIBORtot", "IIP_agency", "IIP_communion", "IIP_elevation", "IIP_PD1", "IIP_PD2", "IIP_PD3", "ECRanx", "ECRavoid", "DASTotal", 
     "Victim", "Perp", "PsychAggV", "PsychAggP", "PhysAssV", "PhysAssP", "bordl_sidp", "narci_sidp", "antso_sidp", "avoid_sidp", "OPD_sidp", "depen_sidp",
     "nonarc", "nobpd", "pdtot", "Happy", "Angry")
 
@@ -45,9 +45,9 @@ mvertex_wide <- dcast(mvertex_melt, PTNUM + alter_num ~ variable + DyadID) #drop
 rm(mvertex_melt)
 
 #duped from Couples_SNA.R... should clean up redundancy later
-mvertex_wide <- plyr::rename(mvertex_wide, c(iip_communion_0="aff_0", iip_communion_1="aff_1",
-        iip_agency_0="dom_0", iip_agency_1="dom_1",
-        iip_elevation_0="iipe_0", iip_elevation_1="iipe_1",
+mvertex_wide <- plyr::rename(mvertex_wide, c(IIP_communion_0="aff_0", IIP_communion_1="aff_1",
+        IIP_agency_0="dom_0", IIP_agency_1="dom_1",
+        IIP_elevation_0="IIPe_0", IIP_elevation_1="IIPe_1",
         szoid_sidp_0="sz_0", szoid_sidp_1="sz_1",
         stypl_sidp_0="styp_0", stypl_sidp_1="styp_1",
         parnd_sidp_0="par_0", parnd_sidp_1="par_1",
@@ -58,12 +58,19 @@ mvertex_wide <- plyr::rename(mvertex_wide, c(iip_communion_0="aff_0", iip_commun
         avoid_sidp_0="avd_0", avoid_sidp_1="avd_1",
         depen_sidp_0="depen_0", depen_sidp_1="depen_1",
         obcmp_sidp_0="obcmp_0", obcmp_sidp_1="obcmp_1",
-        IIP_PD1_0="pd1_0", IIP_PD1_1="pd1_1",
-        IIP_PD2_0="pd2_0", IIP_PD2_1="pd2_1",
-        IIP_PD3_0="pd3_0", IIP_PD3_1="pd3_1",
+        IIP_pd1_0="pd1_0", IIP_pd1_1="pd1_1",
+        IIP_pd2_0="pd2_0", IIP_pd2_1="pd2_1",
+        IIP_pd3_0="pd3_0", IIP_pd3_1="pd3_1",
         PAIBORtot_0="pbor_0", PAIBORtot_1="pbor_1",
         strength_2_0="str2_0", strength_2_1="str2_1",
-        strength_3_0="str3_0", strength_3_1="str3_1"))
+        strength_3_0="str3_0", strength_3_1="str3_1",
+        degree_2_0="deg2_0", degree_2_1="deg2_1",
+        degree_3_0="deg3_0", degree_3_1="deg3_1",
+        evcent_weighted_2_0="ev2w_0", evcent_weighted_2_1="ev2w_1",
+        evcent_binary_2_0="ev2b_0", evcent_binary_2_1="ev2b_1",
+        evcent_weighted_3_0="ev3w_0", evcent_weighted_3_1="ev3w_1",
+        evcent_binary_3_0="ev3b_0", evcent_binary_3_1="ev3b_1"
+        ))
 
 #vertex analyses
 # graph thresholding: _2 removes all links for "have never met" and "not close at all"
@@ -97,13 +104,13 @@ mvertex_wide <- plyr::rename(mvertex_wide, c(iip_communion_0="aff_0", iip_commun
 
 # DEGREE CENTRALITY
 
-#summary(lmer(degree_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+#summary(lmer(degree_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 #summary(lmer(degree_2 ~ PAIBORtot.c + IIP_PD1.c + IIP_PD2.c + IIP_PD3.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 #summary(lmer(degree_2 ~ IIP_PD1.c + IIP_PD2.c + IIP_PD3.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 mvertex$degree_2_sqrt <- sqrt(mvertex$degree_2) #positive skew
-summary(lmer(degree_2 ~ iip_elevation.c + iip_communion.c + iip_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex)) #higher communion associated with greater degree
-(mixed(degree_2 ~ iip_elevation.c + iip_communion.c + iip_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex))
-(mixed(degree_2_sqrt ~ iip_elevation.c + iip_communion.c + iip_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex)) #holds with transform
+summary(lmer(degree_2 ~ IIP_elevation.c + IIP_communion.c + IIP_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex)) #higher communion associated with greater degree
+(mixed(degree_2 ~ IIP_elevation.c + IIP_communion.c + IIP_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex))
+(mixed(degree_2_sqrt ~ IIP_elevation.c + IIP_communion.c + IIP_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex)) #holds with transform
 (mixed(degree_2 ~ pdtot + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex)) #non-bpd sig .01
 summary(lmer(degree_2 ~ bordl_sidp.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex)) #null effect
 summary(lmer(degree_2 ~ narci_sidp.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex)) #null
@@ -189,14 +196,19 @@ prepareMplusData(mvertex_wide, filename="hap_bpd_mlapim.dat", keepCols=c("PTNUM"
 #output <- mplusMLAPIM(mvertex_wide, "degree_2", "dom") #null
 
 
-
+mvertex_wide$affw_0 <- psych::winsor(mvertex_wide$aff_0, trim=0.01)
+mvertex_wide$affw_1 <- psych::winsor(mvertex_wide$aff_1, trim=0.01)
 #MLAPIM
 #degree probably best modeled by Poisson since it is a count distribution (not overly inflated)
-output <- mplusMLAPIM(mvertex_wide, "degree_2", "dom") #null
-output <- mplusMLAPIM(mvertex_wide, "degree_2", "aff") #wow, all negative partner effect!
-output <- mplusMLAPIM(mvertex_wide, "degree_2", "aff", count=TRUE) #wow, all partner effect!
-output <- mplusMLAPIM(mvertex_wide, "degree_2", c("aff", "dom", "iipe")) #altogether: aff holds up
-output <- mplusMLAPIM(mvertex_wide, "degree_2", c("aff", "dom", "iipe"), count=TRUE) #altogether: aff holds up
+output <- mplusMLAPIM(mvertex_wide, "deg2", "dom") #null
+output <- mplusMLAPIM(mvertex_wide, "deg2", "aff") #wow, all negative partner effect!
+output <- mplusMLAPIM(mvertex_wide, "deg2", "affw") #wow, all negative partner effect!
+output <- mplusMLAPIM(mvertex_wide, "deg2", "aff", count=TRUE) #holds as poisson (makes sense given high mean)
+output <- mplusMLAPIM(mvertex_wide, "deg2", c("aff", "dom", "IIPe")) #altogether: aff holds up
+output <- mplusMLAPIM(mvertex_wide, "deg2", c("affw", "dom", "IIPe")) #altogether: aff holds up
+output <- mplusMLAPIM(mvertex_wide, "deg2", c("affw", "dom", "IIPe"), count=TRUE) #altogether: aff holds up
+
+ggplot(mvertex_wide, aes(x=aff_0, y=deg2_0)) + geom_point() + stat_smooth(method="lm")
 
 output <- mplusMLAPIM(mvertex_wide, "degree_2", c("aff", "dom"), count=TRUE) #altogether: aff holds up
 output$free$parameters
@@ -210,28 +222,63 @@ output <- mplusMLAPIM(mvertex_wide, "degree_2", c("nar", "nonarc"), count=TRUE) 
 #check effects at threshold=3
 output <- mplusMLAPIM(mvertex_wide, "degree_3", "aff", count=TRUE) #still significant negative partner
 output <- mplusMLAPIM(mvertex_wide, "degree_3", "dom", count=TRUE) #weak asymmetric partner effect
-output <- mplusMLAPIM(mvertex_wide, "degree_3", "iipe", count=TRUE) #weak asymmetric partner effect
-output <- mplusMLAPIM(mvertex_wide, "degree_3", c("aff", "dom", "iipe"), count=TRUE) #holds up
+output <- mplusMLAPIM(mvertex_wide, "degree_3", "IIPe", count=TRUE) #weak asymmetric partner effect
+output <- mplusMLAPIM(mvertex_wide, "degree_3", c("aff", "dom", "IIPe"), count=TRUE) #holds up
 
-#summary(lmer(degree_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+#compare against cousin: evcent
+output <- mplusMLAPIM(mvertex_wide, "ev2w", "aff")
+output <- mplusMLAPIM(mvertex_wide, "ev2w", "dom")
+output <- mplusMLAPIM(mvertex_wide, "ev2w", "IIPe")
+output <- mplusMLAPIM(mvertex_wide, "ev2w", c("aff", "dom", "IIPe"))
+
+output <- mplusMLAPIM(mvertex_wide, "ev2b", "aff")
+output <- mplusMLAPIM(mvertex_wide, "ev2b", "dom")
+output <- mplusMLAPIM(mvertex_wide, "ev2b", "IIPe")
+output <- mplusMLAPIM(mvertex_wide, "ev2b", c("aff", "dom", "IIPe"))
+
+output <- mplusMLAPIM(mvertex_wide, "ev3w", "aff")
+output <- mplusMLAPIM(mvertex_wide, "ev3w", "dom")
+output <- mplusMLAPIM(mvertex_wide, "ev3w", "IIPe")
+output <- mplusMLAPIM(mvertex_wide, "ev3w", c("aff", "dom", "IIPe"))
+
+output <- mplusMLAPIM(mvertex_wide, "ev3b", "aff")
+output <- mplusMLAPIM(mvertex_wide, "ev3b", "dom")
+output <- mplusMLAPIM(mvertex_wide, "ev3b", "IIPe")
+output <- mplusMLAPIM(mvertex_wide, "ev3b", c("aff", "dom", "IIPe"))
+
+histogram(sqrt(mvertex_wide$ev3b_0))
+histogram(mvertex_wide$deg3_0)
+histogram(mvertex_wide$deg2_0)
+histogram(mvertex_wide$deg3_1)
+histogram(mvertex_wide$deg2_1)
+ggplot(mvertex_wide, aes(x=aff_0, y=ev3b_0)) + geom_point() + stat_smooth(method="lm")
+
+#summary(lmer(degree_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 #summary(lmer(degree_3 ~ PAIBORtot.c + IIP_PD1.c + IIP_PD2.c + IIP_PD3.c + (1 | UsrID) + (1 | PTNUM), mvertex))
-#summary(lmer(degree_3 ~ iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+#summary(lmer(degree_3 ~ IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 #summary(lmer(degree_3 ~ PAIBORtot.c + ECRanx.c + ECRavoid.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
 
 #strength (weighted degree)
-#summary(lmer(strength_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex))
-#summary(lmer(strength_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex))
+#summary(lmer(strength_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex))
+#summary(lmer(strength_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex))
 
 histogram(~strength_2 | DyadID, mvertex)
 histogram(~sqrt(strength_2) | DyadID, mvertex) #much more normal...
 
 #probably also use a Poisson here, but the mean is much higher
-output <- mplusMLAPIM(mvertex_wide, "str2", "aff", count=TRUE) #consistent with degree
-output <- mplusMLAPIM(mvertex_wide, "str2", "dom", count=TRUE) #null
-output <- mplusMLAPIM(mvertex_wide, "str2", "iipe", count=TRUE) #null
-output <- mplusMLAPIM(mvertex_wide, "str2", c("iipe", "aff", "dom"), count=FALSE) #washed out a bit
-output <- mplusMLAPIM(mvertex_wide, "str2", c("aff"), count=FALSE)
+output <- mplusMLAPIM(mvertex_wide, "str2", "aff", count=FALSE) #consistent with degree
+output <- mplusMLAPIM(mvertex_wide, "str2", "dom", count=FALSE) #null
+output <- mplusMLAPIM(mvertex_wide, "str2", "IIPe", count=FALSE) #null
+output <- mplusMLAPIM(mvertex_wide, "str2", c("IIPe", "aff", "dom"), count=FALSE) #washed out a bit
+
+#weaker at 3
+output <- mplusMLAPIM(mvertex_wide, "str3", "aff", count=FALSE) #consistent with degree
+output <- mplusMLAPIM(mvertex_wide, "str3", "dom", count=FALSE) #null
+output <- mplusMLAPIM(mvertex_wide, "str3", "IIPe", count=FALSE) #null
+output <- mplusMLAPIM(mvertex_wide, "str3", c("IIPe", "aff", "dom"), count=FALSE) #washed out a bit
+
+
 
 output <- mplusMLAPIM(mvertex_wide, "str2", c("bpd", "nobpd"), count=TRUE)
 output <- mplusMLAPIM(mvertex_wide, "str2", c("bpd"), count=TRUE)
@@ -241,45 +288,49 @@ output <- mplusMLAPIM(mvertex_wide, "str2", c("nar", "nonarc"), count=TRUE)
 
 
 #eigenvector centrality
-summary(lmer(evcent_weighted_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(evcent_weighted_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 summary(lmer(evcent_weighted_2 ~ PAIBORtot.c + IIP_PD1.c + IIP_PD2.c + IIP_PD3.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
-summary(lmer(evcent_weighted_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(evcent_weighted_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 summary(lmer(evcent_weighted_3 ~ PAIBORtot.c + IIP_PD1.c + IIP_PD2.c + IIP_PD3.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
-summary(lmer(evcent_binary_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(evcent_binary_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 summary(lmer(evcent_binary_2 ~ PAIBORtot.c + IIP_PD1.c + IIP_PD2.c + IIP_PD3.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
-summary(lmer(evcent_binary_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(evcent_binary_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 summary(lmer(evcent_binary_3 ~ PAIBORtot.c + IIP_PD1.c + IIP_PD2.c + IIP_PD3.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
 #closeness centrality: both communion and agency increase closeness
-summary(lmer(closeness_weighted_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
-summary(lmer(closeness_weighted_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(closeness_weighted_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(closeness_weighted_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
-mixed(closeness_weighted_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex, method="KR")
+mixed(closeness_weighted_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex, method="KR")
 
-summary(lmer(closeness_binary_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
-summary(lmer(closeness_binary_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(closeness_binary_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(closeness_binary_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
 #betweenness centrality
-summary(lmer(betweenness_binary_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(betweenness_binary_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
 #agency goes with > betweenness; BPD with weaker betweenness at thresh=3 
-summary(lmer(betweenness_binary_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(betweenness_binary_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
-summary(lmer(betweenness_weighted_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
-summary(lmer(betweenness_weighted_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(betweenness_weighted_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(betweenness_weighted_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
-summary(lmer(eccentricity_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(eccentricity_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
 #longest distance between two nodes is weaker in BPD and greater in agency? Would have predicted > in BPD
-summary(lmer(eccentricity_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(eccentricity_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 summary(lmer(eccentricity_3 ~ PAIBORtot.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
 #weaker local clustering on average in BPD (thresh = 2) -- matches transitivity above
-summary(lmer(locclust_binary_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
-summary(lmer(locclust_binary_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
-summary(lmer(locclust_weighted_2 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
-summary(lmer(locclust_weighted_3 ~ PAIBORtot.c + iip_communion.c + iip_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(locclust_binary_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(locclust_binary_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(locclust_weighted_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(locclust_weighted_3 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + (1 | UsrID) + (1 | PTNUM), mvertex))
 
+
+
+summary(lmer(locclust_binary_2 ~ PAIBORtot.c + IIP_communion.c + IIP_agency.c + DyadID + pdtot + (1 | UsrID) + (1 | PTNUM), mvertex))
+summary(lmer(locclust_weighted_2 ~ IIP_pd1 + IIP_pd2 + IIP_pd3 + DyadID + (1 | UsrID) + (1 | PTNUM), mvertex))

@@ -9,15 +9,18 @@ library(reshape2)
 setwd("/Users/michael/Tresors/PD_SNA/Couples_Baseline_SNA")
 source(file.path(getMainDir(), "Miscellaneous", "Global_Functions.R"))
 source("code/APIM_Functions.R")
-load(file="data/SNA_Processed_6Oct2015.RData")
-load(file="data/selfreports/couples_baseline_clinical_9Oct2015.RData")
+load(file="data/SNA_Processed_27Jul2017.RData")
+load(file="data/selfreports/couples_baseline_clinical_27Jul2017.RData")
 
 #look at relationship satisfaction as a function of BPD etc.
 couples_baseline_clin <- subset(couples_baseline_clin, PTNUM %in% unique(sna$PTNUM))
 
-corstarsl(couples_baseline_clin[,c("DASCon", "DASSat", "DASCoh", "DASAffExp", "DASTotal", "PhysAssV", "PhysAssP", "PsychAggV", "PsychAggP", "Perp", "Victim")])
-predstocenter <- c("PAIBORtot", "iip_agency", "iip_communion", "iip_elevation", "IIP_PD1", "IIP_PD2", "IIP_PD3", "ECRanx", "ECRavoid", "DASTotal", 
-    "Victim", "Perp", "PsychAggV", "PsychAggP", "PhysAssV", "PhysAssP", "bordl_sidp", "narci_sidp", "antso_sidp", "avoid_sidp", "OPD_sidp", "depen_sidp", "nobpd", "nonarc")
+corstarsl(couples_baseline_clin[,c("DASCon", "DASSat", "DASCoh", "DASAffExp", "DASTotal", "CTS_PhysAssV", "CTS_PhysAssP", "CTS_PsychAggV", "CTS_PsychAggP", "CTS_Perp", "CTS_Victim")])
+
+corstarsl(couples_baseline_clin[,c("DASCon", "DASSat", "DASCoh", "DASAffExp", "DASTotal", "IIP_agency", "IIP_communion", "IIP_elevation", "IIP_pd1", "IIP_pd2", "IIP_pd3")])
+
+predstocenter <- c("PAIBORtot", "IIP_agency", "IIP_communion", "IIP_elevation", "IIP_pd1", "IIP_pd2", "IIP_pd3", "IIP_c1", "IIP_c2", "ECRanx", "ECRavoid", "DASTotal", 
+    "CTS_Victim", "CTS_Perp", "CTS_PsychAggV", "CTS_PsychAggP", "CTS_PhysAssV", "CTS_PhysAssP", "bordl_sidp", "narci_sidp", "antso_sidp", "avoid_sidp", "OPD_sidp", "depen_sidp", "nobpd", "nonarc")
 
 couples_baseline_clin <- f_centerPredictors(couples_baseline_clin, predstocenter, addsuffix=".c")
 couples_clin_wide <- f_centerPredictors(couples_clin_wide, as.vector(outer(predstocenter, c("0", "1"), paste, sep="_")), addsuffix=".c")
@@ -37,17 +40,34 @@ couples_clin_wide <- f_centerPredictors(couples_clin_wide, as.vector(outer(preds
 
 
 
-#xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_PD1", additional=".c", printall=TRUE)
-#xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_PD2", additional=".c", printall=FALSE)
-#xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_PD3", additional=".c")
-xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="iip_elevation", additional=".c", printall=FALSE)
-xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="iip_agency", additional=".c", printall=TRUE)
-xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="iip_communion", additional=".c", printall=FALSE)
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_pd1", additional=".c", printall=FALSE) #interpersonal sensitivity
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_pd2", additional=".c", printall=FALSE) #interpersonal ambivalence
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_pd3", additional=".c") #aggression
+
+#not much on c scales
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_c1", additional=".c") #need for social approval
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_c2", additional=".c") #lack of sociability
+
+
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor=c("IIP_pd1", "IIP_pd2", "IIP_pd3"), additional=".c", printall=FALSE) #all PD scales
+
+#conclusion: aggression, but not sensitivity or ambivalence was most strongly associated with relationship dissatisfaction,
+#both in self and other.
+
+
+#switch to circle
+
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_elevation", additional=".c", printall=FALSE)
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_agency", additional=".c", printall=TRUE)
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="IIP_communion", additional=".c", printall=FALSE)
+
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor=c("IIP_communion", "IIP_agency", "IIP_elevation"), additional=".c", printall=FALSE)
+
 xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="narci_sidp", additional=".c")
 xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor=c("narci_sidp", "nonarc"), additional=".c", printall=FALSE) #holds up
 anova(xx$indistinguishable, xx$afree)
 xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="bordl_sidp", additional=".c", printall=FALSE)
-xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor=c("bordl_sidp", "nobpd"), additional=".c", printall=FALSE)
+xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor=c("bordl_sidp", "nobpd"), additional=".c", printall=TRUE)
 xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor="bordlCount", printall=FALSE)
 xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor=c("nobpdCount", "bordlCount"), printall=FALSE)
 xx <- runAPIM(couples_clin_wide, DV="DASTotal", predictor=c("pdtot"), printall=FALSE)

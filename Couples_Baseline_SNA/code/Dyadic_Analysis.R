@@ -6,14 +6,14 @@ library(reshape2)
 library(lattice)
 setwd("/Users/michael/Tresors/PD_SNA/Couples_Baseline_SNA")
 source(file.path(getMainDir(), "Miscellaneous", "Global_Functions.R"))
-load(file="data/SNA_Processed_6Oct2015.RData")
-load(file="data/couple_graph_measures_6Oct2015.RData") #has dyad members in graph
+load(file="data/SNA_Processed_27Jul2017.RData")
+load(file="data/couple_graph_measures_27Jul2017.RData") #has dyad members in graph
 patientBw <- with(couple_vertex_metrics, betweenness_weighted_2[role=="patient"])
 partnerBw <- with(couple_vertex_metrics, betweenness_weighted_2[role=="partner"])
 
 #load(file="data/couple_graph_measures_6Oct2015.RData") #has dyad members in graph
-load(file="data/selfreports/couples_baseline_clinical_9Oct2015.RData")
-load("data/couple_graph_measures_nodyad_15Oct2015.RData")
+load(file="data/selfreports/couples_baseline_clinical_27Jul2017.RData")
+load("data/couple_graph_measures_nodyad_27Jul2017.RData")
 
 #get vertex betweenness for each partner and get relationship duration
 coupleLength <- sapply(couple_graphs, function(p) {
@@ -39,24 +39,45 @@ mvertex <- merge(couple_vertex_metrics, couples_clin_wide, by=c("PTNUM"), all.x=
 
 mgraph$PTNUM <- factor(mgraph$PTNUM)
 mvertex$PTNUM <- factor(mvertex$PTNUM)
-predstocenter <- c("PAIBORtot", "iip_agency", "iip_communion", "iip_elevation", "IIP_PD1", "IIP_PD2", "IIP_PD3", "ECRanx", "ECRavoid", "DASTotal", 
-    "Victim", "Perp", "bordl_sidp", "narci_sidp", "antso_sidp", "avoid_sidp", "OPD_sidp", "nonarc", "pdtot", "nobpd", "reldur")
+predstocenter <- c("PAIBORtot", "IIP_agency", "IIP_communion", "IIP_elevation", "IIP_pd1", "IIP_pd2", "IIP_pd3", "ECRanx", "ECRavoid", "DASTotal", 
+    "CTS_Victim", "CTS_Perp", "bordl_sidp", "narci_sidp", "antso_sidp", "avoid_sidp", "OPD_sidp", "nonarc", "pdtot", "nobpd", "reldur")
 mgraph <- f_centerPredictors(mgraph, apply(expand.grid(predstocenter, c("0", "1")), 1, paste, collapse="_"), addsuffix=".c")
 mvertex <- f_centerPredictors(mvertex, apply(expand.grid(predstocenter, c("0", "1")), 1, paste, collapse="_"), addsuffix=".c")
 
 ##Betweenness of couple
 histogram(mgraph$pbw_0)
 histogram(mgraph$pbw_1)
+
 t.test(mgraph$pbw_0, mgraph$pbw_1) #NS
 
-tmp <- plyr::rename(mgraph, c(iip_agency_0.c="domc_0", iip_agency_1.c="domc_1", iip_communion_0.c="affc_0", iip_communion_1.c="affc_1",
-        iip_elevation_0.c="iipe_0", iip_elevation_1.c="iipe_1", bordl_sidp_0.c="bpdc_0", bordl_sidp_1.c="bpdc_1"))
+tmp <- plyr::rename(mgraph, c(IIP_agency_0.c="domc_0", IIP_agency_1.c="domc_1", IIP_communion_0.c="affc_0", IIP_communion_1.c="affc_1",
+        IIP_elevation_0.c="iipe_0", IIP_elevation_1.c="iipe_1", bordl_sidp_0.c="bpdc_0", bordl_sidp_1.c="bpdc_1"))
 
 #summary(glm(pbw ~ p_age_0 + iip_communion_0.c + iip_communion_1.c, x, family=poisson))
 output <- mplusAPIM(tmp, "pbw", c("domc", "affc", "iipe"))
 output <- mplusAPIM(tmp, "pbw", c("domc", "affc"))
-output <- mplusAPIM(tmp, "pbw", c("domc"))
+output <- mplusAPIM(tmp, "pbw", c("domcw"))
 output <- mplusAPIM(tmp, "pbw", c("affc"), exogCorr=TRUE)
+
+tmp$domcw_1 <- winsor(tmp$domc_1, trim=.01)
+tmp$domcw_0 <- winsor(tmp$domc_0, trim=.01)
+
+cor(select(tmp, domcw_1, domcw_0, pbw_0, pbw_1), use="pairwise.complete.obs")
+
+#winsorizing the goofy bottom guy improves sig.
+output <- mplusAPIM(tmp, "pbw", c("domcw", "affc"))
+output <- mplusAPIM(tmp, "pbw", c("domcw", "affc", "iipe"))
+
+
+#flat, consistent with affc apim
+ggplot(tmp, aes(x=affc_0, y=pbw_0)) + geom_point() + stat_smooth(method="lm")
+ggplot(tmp, aes(x=affc_1, y=pbw_1)) + geom_point() + stat_smooth(method="lm")
+
+ggplot(tmp, aes(x=domc_0, y=pbw_0)) + geom_point() + stat_smooth(method="lm")
+ggplot(tmp, aes(x=domc_1, y=pbw_1)) + geom_point() + stat_smooth(method="lm")
+
+ggplot(tmp, aes(x=domc_0, y=pbw_1)) + geom_point() + stat_smooth(method="lm")
+ggplot(tmp, aes(x=domc_1, y=pbw_0)) + geom_point() + stat_smooth(method="lm")
 
 output <- mplusAPIM(tmp, "pbw", c("pdtot"), exogCorr=TRUE)
 output <- mplusAPIM(tmp, "pbw", c("bpdc", "nobpd"), exogCorr=TRUE) #sig neg partner Bw for non-bpd Sx
@@ -72,22 +93,25 @@ histogram(x$nshared)
 x <- merge(x, couples_clin_wide, by="PTNUM")
 x <- f_centerPredictors(x, apply(expand.grid(predstocenter, c("0", "1")), 1, paste, collapse="_"), addsuffix=".c")
 
-summary(glm(nshared ~ p_age_0 + iip_communion_0.c + iip_communion_1.c, x, family=poisson))
-summary(glm(nshared ~ p_age_0 + p_age_1 + iip_agency_0.c + iip_agency_1.c, x, family=poisson))
-summary(m <- glm(nshared ~ iip_agency_0 + iip_agency_1, x, family=poisson)) #p_age_0 + 
-newdf <- with(mgraph, expand.grid(iip_agency_0=round(seq(min(iip_agency_0, na.rm=T), max(iip_agency_0, na.rm=T), length.out=10), 2), 
-        iip_agency_1=round(seq(min(iip_agency_1, na.rm=T), max(iip_agency_1, na.rm=T), length.out=10), 2)))
+summary(glm(nshared ~ p_age_0 + p_age_1 + IIP_communion_0.c + IIP_communion_1.c, x, family=poisson))
+summary(glm(nshared ~ p_age_0 + p_age_1 + IIP_agency_0.c + IIP_agency_1.c*p_age_1, x, family=poisson))
+
+summary(lm(nshared ~ p_age_0 + p_age_1 + IIP_agency_0.c + IIP_agency_1.c, x))
+
+summary(m <- glm(nshared ~ IIP_agency_0 + IIP_agency_1, x, family=poisson)) #p_age_0 + 
+newdf <- with(mgraph, expand.grid(IIP_agency_0=round(seq(min(IIP_agency_0, na.rm=T), max(IIP_agency_0, na.rm=T), length.out=10), 2), 
+        IIP_agency_1=round(seq(min(IIP_agency_1, na.rm=T), max(IIP_agency_1, na.rm=T), length.out=10), 2)))
 
 ggplot(data=transform(newdf, yp=exp(predict(m, newdf))), 
-    aes(y=yp, x=iip_agency_1, color=factor(iip_agency_0))) + stat_smooth(method=lm)
+    aes(y=yp, x=IIP_agency_1, color=factor(IIP_agency_0))) + stat_smooth(method=lm)
 
-summary(m <- glm(nshared ~ p_age_0 + p_age_1 + iip_elevation_0 + iip_elevation_1, x, family=poisson)) #p_age_0 
-summary(m <- glm(nshared ~ iip_elevation_0 * iip_elevation_1, x, family=poisson)) #p_age_0
-newdf <- with(mgraph, expand.grid(iip_elevation_0=round(seq(min(iip_elevation_0, na.rm=T), max(iip_elevation_0, na.rm=T), length.out=10), 2), 
-        iip_elevation_1=round(seq(min(iip_elevation_1, na.rm=T), max(iip_elevation_1, na.rm=T), length.out=10), 2)))
+summary(m <- glm(nshared ~ p_age_0 + p_age_1 + IIP_elevation_0 + IIP_elevation_1, x, family=poisson)) #p_age_0 
+summary(m <- glm(nshared ~ IIP_elevation_0 * IIP_elevation_1, x, family=poisson)) #p_age_0
+newdf <- with(mgraph, expand.grid(IIP_elevation_0=round(seq(min(IIP_elevation_0, na.rm=T), max(IIP_elevation_0, na.rm=T), length.out=10), 2), 
+        IIP_elevation_1=round(seq(min(IIP_elevation_1, na.rm=T), max(IIP_elevation_1, na.rm=T), length.out=10), 2)))
 
 ggplot(data=transform(newdf, yp=exp(predict(m, newdf))), 
-    aes(y=yp, x=iip_elevation_1, color=factor(iip_elevation_0))) + stat_smooth(method=lm)
+    aes(y=yp, x=IIP_elevation_1, color=factor(IIP_elevation_0))) + stat_smooth(method=lm)
 
 summary(glm(nshared ~ p_age_0 + pdtot_0.c + pdtot_1.c, x, family=poisson))
 summary(glm(nshared ~ p_age_0 + narci_sidp_0.c + narci_sidp_1.c, x, family=poisson))
@@ -103,10 +127,10 @@ cor(x$nshared, x$narci_sidp_1, use="pairwise.complete.obs")
 
 
 
-#graph-wide analysis
+#graph-wide analysis (assortative mating here)
 cor.test(~ PAIBORtot_0.c + PAIBORtot_1.c, mgraph) #weak correlation
-cor.test(~ iip_agency_0.c + iip_agency_1.c, mgraph) #weak correlation
-cor.test(~ iip_communion_0.c + iip_communion_1.c, mgraph) #weak correlation
+cor.test(~ IIP_agency_0.c + IIP_agency_1.c, mgraph) #no corr
+cor.test(~ IIP_communion_0.c + IIP_communion_1.c, mgraph) #no corr
 cor.test(~ ECRanx_0.c + ECRanx_1.c, mgraph) #weak correlation
 cor.test(~ ECRavoid_0.c + ECRavoid_1.c, mgraph) #weak correlation
 cor(mgraph[,c("IIP_PD1_0.c", "IIP_PD1_1.c", "IIP_PD2_0.c", "IIP_PD2_1.c", "IIP_PD3_0.c", "IIP_PD3_1.c")], use="pairwise.complete.obs")
@@ -437,8 +461,9 @@ summary(m <- lmer(degree_2 ~ iip_communion_0.c + bordl_sidp_1.c + nobpd_0.c*role
 summary(m <- lmer(strength_3 ~ narci_sidp_0.c*role + narci_sidp_1.c*role + nonarc_0.c*role + nonarc_1.c*role + reldur + (1 + role | PTNUM), mvertex, REML=FALSE))
 car::Anova(m)
 
-
-summary(m <- lmer(strength_3 ~ iip_communion_0.c*role + iip_communion_1.c*role + iip_agency_0.c*role + iip_agency_1.c*role + reldur + (1 + role | PTNUM), mvertex, REML=FALSE))
+library(texreg)
+library(broom)
+summary(m <- lmer(strength_2 ~ IIP_communion_0.c*role + IIP_communion_1.c*role + IIP_agency_0.c*role + IIP_agency_1.c*role + reldur + (1 + role | PTNUM), mvertex, REML=FALSE))
 car::Anova(m)
 
 
